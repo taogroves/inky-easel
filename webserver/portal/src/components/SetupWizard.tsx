@@ -370,7 +370,7 @@ async function buildZip(files: Record<string, string>): Promise<Blob> {
 
   const centralSize = central.reduce((a, b) => a + b.length, 0);
   const centralOffset = offset;
-  for (const c of central) parts.push(c);
+  for (const c of central) parts.push(c as BlobPart);
   offset += centralSize;
 
   const eocd = new ArrayBuffer(22);

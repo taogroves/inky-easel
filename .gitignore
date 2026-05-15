@@ -1,1 +1,75 @@
+# Paths excluded from version control (legacy / local mirror — remove if this tree should ship publicly)
 /inky-frame/
+
+# ----- Environment & credentials (never commit) -----
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+*.pem
+*.key
+*.p12
+*.pfx
+*.csr
+*.der
+
+credentials.json
+*credentials*.json
+service-account*.json
+*-service-account*.json
+.aws/credentials
+
+.secrets/
+secrets.*
+.secret*
+
+# ----- Dependencies -----
+node_modules/
+
+# ----- Builds & generated -----
+.next/
+out/
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# ----- Python -----
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+ENV/
+
+# ----- Logs & caches -----
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm/
+.cache/
+.parcel-cache/
+.turbo/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+coverage/
+htmlcov/
+*.cover
+
+# ----- OS & editors -----
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+*.swo
+*~
+
+# ----- Infra local state -----
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl

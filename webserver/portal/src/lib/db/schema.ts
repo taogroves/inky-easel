@@ -8,18 +8,36 @@
 
 import {
   boolean,
+  customType,
   datetime,
   double,
   index,
   int,
   json,
-  longblob,
   mediumtext,
   mysqlTable,
   text,
   uniqueIndex,
   varchar,
 } from "drizzle-orm/mysql-core";
+
+/** LONGBLOB — removed from drizzle-orm/mysql-core exports; keep SQL type for MariaDB */
+const longblob = customType<{
+  data: Buffer | null;
+  driverData: Buffer | null;
+}>({
+  dataType() {
+    return "longblob";
+  },
+  toDriver(value) {
+    return value;
+  },
+  fromDriver(value) {
+    if (value == null) return null;
+    if (Buffer.isBuffer(value)) return value;
+    return Buffer.from(value as Uint8Array);
+  },
+});
 
 // ---------- better-auth tables ----------
 
