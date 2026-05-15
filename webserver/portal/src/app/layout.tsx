@@ -1,0 +1,51 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { headers } from "next/headers";
+
+import { auth } from "@/lib/auth";
+import SignOutButton from "@/components/SignOutButton";
+import "./globals.css";
+
+export const metadata: Metadata = {
+  title: "Inky Easel",
+  description: "A portal for your Inky Frame e-paper display",
+};
+
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const session = await auth.api.getSession({ headers: await headers() }).catch(() => null);
+  const user = session?.user ?? null;
+
+  return (
+    <html lang="en">
+      <body>
+        <header className="border-b border-ink/15 bg-paper">
+          <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
+            <Link href="/" className="text-xl font-display font-semibold tracking-tight">
+              Inky Easel
+            </Link>
+            <nav className="flex items-center gap-4 text-sm">
+              {user ? (
+                <>
+                  <Link href="/dashboard" className="hover:underline">Dashboard</Link>
+                  <Link href="/dashboard/plugins" className="hover:underline">Plugins</Link>
+                  <Link href="/dashboard/send" className="hover:underline">Send</Link>
+                  <span className="text-ink-soft hidden sm:inline">{user.email}</span>
+                  <SignOutButton />
+                </>
+              ) : (
+                <>
+                  <Link href="/sign-in" className="hover:underline">Sign in</Link>
+                  <Link href="/sign-up" className="btn-primary">Get started</Link>
+                </>
+              )}
+            </nav>
+          </div>
+        </header>
+        <main className="mx-auto max-w-5xl px-6 py-10">{children}</main>
+        <footer className="mx-auto max-w-5xl px-6 py-10 text-center text-xs text-ink-soft">
+          A schedule-driven e-paper portal.
+        </footer>
+      </body>
+    </html>
+  );
+}

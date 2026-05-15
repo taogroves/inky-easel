@@ -1,0 +1,66 @@
+services:
+  db:
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-inky_easel}
+      MARIADB_USER: ${MARIADB_USER:-inky}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD:-inky}
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-rootinky}
+    volumes:
+      - inky-db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "${MARIADB_PORT:-3306}:3306"
+
+  api:
+    build:
+      context: ..
+      dockerfile: webserver/api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ENV: production
+      DATABASE_URL: ${API_DATABASE_URL:-mysql+aiomysql://inky:inky@db:3306/inky_easel}
+      SERVICE_SECRET: ${SERVICE_SECRET:-dev-service-secret}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      CONTENT_CACHE_MINUTES: ${CONTENT_CACHE_MINUTES:-15}
+      FRAME_FIRMWARE_DIR: /app/frame-firmware
+    ports:
+      - "${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  portal:
+    build:
+      context: ./portal
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${PORTAL_DATABASE_URL:-mysql://inky:inky@db:3306/inky_easel}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-replace-me}
+      BETTER_AUTH_TRUSTED_ORIGINS: ${BETTER_AUTH_TRUSTED_ORIGINS:-http://localhost:3000}
+      NEXT_PUBLIC_BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      API_BASE_URL: http://api:8000
+      SERVICE_SECRET: ${SERVICE_SECRET:-dev-service-secret}
+    ports:
+      - "${PORTAL_PORT:-3000}:3000"
+
+volumes:
+  inky-db:
