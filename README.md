@@ -21,7 +21,7 @@ self-hosted server.
 
 | Path | What lives there |
 | --- | --- |
-| `frame-firmware/` | The MicroPython files that get copied to the Inky Frame's SD card. |
+| `frame-firmware/` | The MicroPython loader and SD-card app files for the Inky Frame. |
 | `inky-frame/` | Upstream Pimoroni examples + docs. Used as reference. |
 | `webserver/api/` | FastAPI service. The Inky Frame talks to this directly. |
 | `webserver/portal/` | Next.js + better-auth + Drizzle (MariaDB) user portal. |
@@ -49,16 +49,18 @@ self-hosted server.
 
 1. Flash any recent Pimoroni MicroPython build (with `-with-examples` if you
    like) onto your Inky Frame. The default board firmware is enough.
-2. Stand up the server stack:
+2. Copy `frame-firmware/flash_loader_main.py` to the frame's internal flash as
+   `main.py`. This is a one-time loader; it runs the app from the SD card.
+3. Stand up the server stack:
    ```bash
    cd webserver
    cp .env.example .env       # edit the secrets
    docker compose up --build
    ```
-3. Open http://localhost:3000, create an account, click **+ New frame**.
-4. Walk through the SD card setup wizard. Plug the SD card into the frame and
+4. Open http://localhost:3000, create an account, click **+ New frame**.
+5. Walk through the SD card setup wizard. Plug the SD card into the frame and
    tap reset.
-5. Build a schedule. Watch it loop.
+6. Build a schedule. Watch it loop.
 
 See `webserver/README.md` and `frame-firmware/README.md` for component-level
 details.
@@ -70,7 +72,7 @@ details.
   matching renderer in `webserver/api/app/content/renderer.py`. Add it to the
   `PRESETS` array in `webserver/portal/src/components/ScheduleEditor.tsx`.
 * **New display size:** map a `DISPLAY_TYPE` string in
-  `frame-firmware/main.py:_import_display` and add an entry to
+  `frame-firmware/inky_easel_app.py:_import_display` and add an entry to
   `DISPLAY_DIMENSIONS` in the renderer.
 * **OAuth or other auth providers:** configure better-auth in
   `webserver/portal/src/lib/auth.ts`.

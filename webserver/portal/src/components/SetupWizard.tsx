@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 
 import LocationPicker from "@/components/LocationPicker";
 import { buildBundleAction, rotateFrameSecretAction, updateFrameAction } from "@/lib/actions";
@@ -13,6 +13,7 @@ export default function SetupWizard({ frame: initialFrame }: { frame: FrameWithS
   const [step, setStep] = useState<Step>("review");
   const [ssid, setSsid] = useState("");
   const [password, setPassword] = useState("");
+  const [serverUrl, setServerUrl] = useState("");
   const [bundle, setBundle] = useState<SetupBundle | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -24,9 +25,36 @@ export default function SetupWizard({ frame: initialFrame }: { frame: FrameWithS
   const [verifyStatus, setVerifyStatus] = useState<"idle" | "polling" | "ok" | "stalled">("idle");
   const [verifyDetail, setVerifyDetail] = useState<string>("");
 
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("inky-easel.frameServerUrl");
+      if (saved) {
+        setServerUrl(saved);
+        return;
+      }
+      const { hostname, protocol } = window.location;
+      const canSuggestLanUrl = process.env.NODE_ENV === "development"
+        && hostname
+        && !["localhost", "127.0.0.1", "::1"].includes(hostname);
+      if (canSuggestLanUrl) {
+        setServerUrl(`${protocol}//${hostname}:8000`);
+      }
+    } catch {
+      // localStorage may be unavailable in private browsing or hardened contexts.
+    }
+  }, []);
+
   async function buildBundle() {
     setError(null);
-    const result = await buildBundleAction(frame.id, ssid, password);
+    const trimmedServerUrl = serverUrl.trim();
+    if (trimmedServerUrl) {
+      try {
+        window.localStorage.setItem("inky-easel.frameServerUrl", trimmedServerUrl);
+      } catch {
+        // Non-critical convenience only.
+      }
+    }
+    const result = await buildBundleAction(frame.id, ssid, password, trimmedServerUrl || undefined);
     if (!result.ok) {
       setError(result.error);
       return;
@@ -156,6 +184,20 @@ export default function SetupWizard({ frame: initialFrame }: { frame: FrameWithS
               Stored only on the SD card (locally on the frame) as <code>secrets.py</code>. Not stored on the server.
             </p>
           </div>
+          <div>
+            <label className="label" htmlFor="server-url">Frame server URL</label>
+            <input
+              id="server-url"
+              className="input"
+              type="url"
+              value={serverUrl}
+              onChange={(e) => setServerUrl(e.target.value)}
+              placeholder="http://192.168.1.42:8000"
+            />
+            <p className="mt-1 text-xs text-ink-soft">
+              Optional. Leave blank for the deployed <code>PUBLIC_BASE_URL</code>. For local hardware, use this computer&apos;s LAN IP and API port, not <code>localhost</code>.
+            </p>
+          </div>
           {error && <p className="text-sm text-red-700">{error}</p>}
           <button
             type="button"
@@ -179,6 +221,14 @@ export default function SetupWizard({ frame: initialFrame }: { frame: FrameWithS
           <p className="text-sm text-ink-soft">Finish the previous step first.</p>
         ) : (
           <div className="space-y-3">
+            <p className="text-sm text-ink-soft">
+              This bundle configures the frame to poll <code>{bundle.server_url}</code>.
+            </p>
+            <p className="text-sm text-ink-soft">
+              On a new frame, first copy <code>flash_loader_main.py</code> to internal
+              flash as <code>main.py</code>. After that one-time step, future setup
+              bundles only need to be written to the SD card.
+            </p>
             <p className="text-sm text-ink-soft">
               Insert a FAT32-formatted microSD card into your computer. Then either:
             </p>
@@ -224,8 +274,9 @@ export default function SetupWizard({ frame: initialFrame }: { frame: FrameWithS
 
       <Step index={4} active={step === "verify"} title="Verify the frame connects" done={false} onEnter={() => setStep("verify")}>
         <p className="text-sm text-ink-soft">
-          Insert the SD card into your Inky Frame, then tap the reset button. The frame will wake up,
-          phone home, and we&apos;ll show a confirmation here.
+          Insert the SD card into your Inky Frame, make sure the one-time flash loader is installed,
+          then tap the reset button. The frame will wake up, phone home, and we&apos;ll show a
+          confirmation here.
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <button type="button" className="btn-primary" onClick={verifyConnection} disabled={verifyStatus === "polling"}>

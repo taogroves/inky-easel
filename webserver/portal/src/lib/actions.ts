@@ -76,11 +76,17 @@ export async function buildBundleAction(
   frameId: string,
   wifi_ssid: string,
   wifi_password: string,
+  server_url?: string,
 ): Promise<ActionResult<SetupBundle>> {
   try {
+    const payload = {
+      wifi_ssid,
+      wifi_password,
+      ...(server_url?.trim() ? { server_url: server_url.trim() } : {}),
+    };
     const bundle = await api<SetupBundle>(`/api/setup/${frameId}/bundle`, {
       method: "POST",
-      body: JSON.stringify({ wifi_ssid, wifi_password }),
+      body: JSON.stringify(payload),
     });
     return { ok: true, data: bundle };
   } catch (e) {

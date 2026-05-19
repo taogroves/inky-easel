@@ -27,10 +27,11 @@ export default async function HomePage() {
       <aside className="card">
         <h2 className="font-display text-2xl">How it works</h2>
         <ol className="mt-4 space-y-3 text-sm text-ink-soft">
-          <li><span className="font-semibold text-ink">1.</span> Plug a microSD card into your computer.</li>
-          <li><span className="font-semibold text-ink">2.</span> Run the setup wizard to write your Wi-Fi, location, and a frame ID.</li>
-          <li><span className="font-semibold text-ink">3.</span> Insert the card in your Inky Frame.</li>
-          <li><span className="font-semibold text-ink">4.</span> Build a schedule and watch it loop forever.</li>
+          <li><span className="font-semibold text-ink">1.</span> Install the one-time flash loader on your Inky Frame.</li>
+          <li><span className="font-semibold text-ink">2.</span> Plug a microSD card into your computer.</li>
+          <li><span className="font-semibold text-ink">3.</span> Run the setup wizard to write your Wi-Fi, location, and a frame ID.</li>
+          <li><span className="font-semibold text-ink">4.</span> Insert the card in your Inky Frame.</li>
+          <li><span className="font-semibold text-ink">5.</span> Build a schedule and watch it loop forever.</li>
         </ol>
       </aside>
     </div>

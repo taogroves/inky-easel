@@ -65,9 +65,10 @@ async def _prune_cache(session: AsyncSession) -> None:
     )
 
 
-def _image_url(token: str) -> str:
+def _image_url(token: str, base_url: str | None = None) -> str:
     settings = get_settings()
-    return settings.public_base_url.rstrip("/") + f"/api/frame/asset/{token}"
+    public_base_url = (base_url or settings.public_base_url).rstrip("/")
+    return public_base_url + f"/api/frame/asset/{token}"
 
 
 async def _resolve_inbox(
@@ -166,7 +167,9 @@ async def _resolve_plugin(
     return PluginPayload(code=plugin.code, context=context)
 
 
-async def resolve_next_for_frame(session: AsyncSession, frame: Frame) -> FramePollResponse:
+async def resolve_next_for_frame(
+    session: AsyncSession, frame: Frame, asset_base_url: str | None = None
+) -> FramePollResponse:
     state = (
         await session.execute(select(FrameState).where(FrameState.frame_id == frame.id))
     ).scalar_one_or_none()
@@ -174,7 +177,13 @@ async def resolve_next_for_frame(session: AsyncSession, frame: Frame) -> FramePo
         state = FrameState(frame_id=frame.id, current_index=0)
         session.add(state)
 
-    schedule = list(frame.schedule_items)
+    schedule = (
+        await session.execute(
+            select(ScheduleItem)
+            .where(ScheduleItem.frame_id == frame.id)
+            .order_by(ScheduleItem.position)
+        )
+    ).scalars().all()
 
     if not schedule:
         return FramePollResponse(
@@ -201,26 +210,26 @@ async def resolve_next_for_frame(session: AsyncSession, frame: Frame) -> FramePo
         jpeg, _meta = await _resolve_inbox(session, frame, target)
         token = await _cache_jpeg(session, jpeg)
         response.type = "image"
-        response.image_url = _image_url(token)
+        response.image_url = _image_url(token, asset_base_url)
         response.text = None
     elif item.item_type == "weather":
         jpeg = await _resolve_weather(frame, target)
         token = await _cache_jpeg(session, jpeg)
         response.type = "image"
-        response.image_url = _image_url(token)
+        response.image_url = _image_url(token, asset_base_url)
         response.text = None
     elif item.item_type == "xkcd":
         jpeg = await _resolve_xkcd(target)
         token = await _cache_jpeg(session, jpeg)
         response.type = "image"
-        response.image_url = _image_url(token)
+        response.image_url = _image_url(token, asset_base_url)
         response.text = None
     elif item.item_type == "bbc":
         feed = (item.config or {}).get("feed_url") if item.config else None
         jpeg = await _resolve_bbc(target, feed)
         token = await _cache_jpeg(session, jpeg)
         response.type = "image"
-        response.image_url = _image_url(token)
+        response.image_url = _image_url(token, asset_base_url)
         response.text = None
     elif item.item_type == "static":
         text = (item.config or {}) if item.config else {}

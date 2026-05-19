@@ -32,15 +32,41 @@ class PollError(Exception):
     pass
 
 
+def _to_text(raw):
+    if hasattr(raw, "decode"):
+        return raw.decode("utf-8")
+    return raw
+
+
+def _preview(text, limit=120):
+    text = str(text).replace("\r", " ").replace("\n", " ").strip()
+    if len(text) > limit:
+        return text[:limit] + "..."
+    return text
+
+
 def _http_post_json(url, payload):
     body = json.dumps(payload).encode("utf-8")
-    sock = _urequest.urlopen(url, data=body, headers={"Content-Type": "application/json"})
+    print("POST", url)
+    sock = _urequest.urlopen(
+        url,
+        data=body,
+        headers={"Content-Type": "application/json", "Accept": "application/json"},
+    )
     try:
         raw = sock.read()
     finally:
         sock.close()
     gc.collect()
-    return json.loads(raw)
+
+    status = getattr(sock, "status", None) or getattr(sock, "status_code", None)
+    text = _to_text(raw)
+    if status and status >= 400:
+        raise PollError("HTTP {}: {}".format(status, _preview(text)))
+    try:
+        return json.loads(text)
+    except Exception as e:
+        raise PollError("Bad JSON: {} ({})".format(_preview(text), e))
 
 
 def poll(server_url, frame_id, secret, battery_voltage, battery_percent, wakeup):
@@ -54,6 +80,8 @@ def poll(server_url, frame_id, secret, battery_voltage, battery_percent, wakeup)
     }
     try:
         return _http_post_json(url, payload)
+    except PollError:
+        raise
     except Exception as e:
         raise PollError(str(e))
 

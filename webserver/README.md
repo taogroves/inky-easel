@@ -23,6 +23,25 @@ docker compose up --build
 
 Then visit http://localhost:3000 to create the first user.
 
+### Local physical frame setup
+
+For fast local iteration, keep using the local portal in your browser, but build
+the frame bundle with a server URL the frame can reach on your LAN:
+
+1. Start the stack with `docker compose up --build`.
+2. Find your development machine's LAN IP, for example `ipconfig getifaddr en0`
+   on macOS.
+3. If this is the first setup for the physical frame, copy
+   `../frame-firmware/flash_loader_main.py` to internal flash as `main.py`.
+4. In the setup wizard's "Frame server URL" field, enter
+   `http://<lan-ip>:8000`.
+5. Write the bundle to the SD card and reset the frame.
+
+Do not use `localhost` in a physical frame bundle. On the Pico, `localhost`
+means the frame itself. Image asset URLs are generated from the same origin the
+frame used for `POST /api/frame/poll`, so a frame polling the LAN URL will also
+fetch images from that LAN URL.
+
 ## Auth model
 
 * Browser <-> Portal: better-auth (email + password by default; add OAuth in
@@ -71,7 +90,8 @@ code, or draws the inline text.
   subdomain to the `api` service (or expose `api` via the portal's reverse
   proxy if you'd rather not).
 * Make sure `PUBLIC_BASE_URL` and `BETTER_AUTH_URL` resolve to the right
-  outside URLs - the Inky Frame uses `PUBLIC_BASE_URL` to fetch images.
+  outside URLs. Production setup bundles default to `PUBLIC_BASE_URL`; local
+  development can override the frame URL per bundle from the setup wizard.
 
 ## Manual smoke tests
 

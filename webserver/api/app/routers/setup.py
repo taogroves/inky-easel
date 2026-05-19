@@ -8,9 +8,10 @@ the user's SD card via the File System Access API (or downloads a ZIP).
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,6 +34,8 @@ def _firmware_dir() -> Path:
 
 FIRMWARE_FILES = [
     "main.py",
+    "flash_loader_main.py",
+    "inky_easel_app.py",
     "frame_client.py",
     "battery.py",
     "display.py",
@@ -43,11 +46,31 @@ FIRMWARE_FILES = [
 class WifiBody(BaseModel):
     wifi_ssid: str
     wifi_password: str
+    server_url: str | None = Field(default=None, max_length=256)
+
+    @field_validator("server_url")
+    @classmethod
+    def validate_server_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip().rstrip("/")
+        if not cleaned:
+            return None
+        parsed = urlparse(cleaned)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("Server URL must be an http(s) URL such as http://192.168.1.42:8000")
+        if parsed.query or parsed.fragment:
+            raise ValueError("Server URL must not include a query string or fragment")
+        return cleaned
+
+
+def _py_string(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
 def _render_secrets(body: WifiBody) -> str:
-    ssid = body.wifi_ssid.replace('"', '\\"')
-    pw = body.wifi_password.replace('"', '\\"')
+    ssid = _py_string(body.wifi_ssid)
+    pw = _py_string(body.wifi_password)
     return (
         f'WIFI_SSID = "{ssid}"\n'
         f'WIFI_PASSWORD = "{pw}"\n'
@@ -58,7 +81,7 @@ def _render_config(frame: Frame, server_url: str) -> str:
     return (
         f'FRAME_ID = "{frame.id}"\n'
         f'FRAME_SECRET = "{frame.secret}"\n'
-        f'SERVER_URL = "{server_url}"\n'
+        f'SERVER_URL = "{_py_string(server_url)}"\n'
         f'DISPLAY_TYPE = "{frame.display_type}"\n'
         f'TIMEZONE_OFFSET_HOURS = 0\n'
         f'DEFAULT_SLEEP_MINUTES = 30\n'
@@ -79,6 +102,7 @@ async def build_bundle(
         raise HTTPException(404, "Frame not found")
 
     settings = get_settings()
+    server_url = body.server_url or settings.public_base_url.rstrip("/")
 
     firmware_dir = _firmware_dir()
     files: dict[str, str] = {}
@@ -89,18 +113,20 @@ async def build_bundle(
         files[name] = path.read_text(encoding="utf-8")
 
     files["secrets.py"] = _render_secrets(body)
-    files["frame_config.py"] = _render_config(frame, settings.public_base_url)
+    files["frame_config.py"] = _render_config(frame, server_url)
     files["README.txt"] = (
         "Inky Easel SD bundle\n"
         "====================\n"
         "Copy every file in this folder to the root of a FAT32-formatted\n"
         "microSD card, then insert it into your Inky Frame.\n"
-        f"\nFrame name: {frame.name}\nDisplay: {frame.display_type}\n"
+        "\nFor new frames, also copy flash_loader_main.py to the frame's internal\n"
+        "flash as main.py. You only need to do that once.\n"
+        f"\nFrame name: {frame.name}\nDisplay: {frame.display_type}\nServer URL: {server_url}\n"
         "If you change Wi-Fi or your server URL, re-run the setup wizard.\n"
     )
 
     return SetupBundleOut(
         frame=FrameSecretOut.model_validate(frame, from_attributes=True),
         files=files,
-        server_url=settings.public_base_url,
+        server_url=server_url,
     )

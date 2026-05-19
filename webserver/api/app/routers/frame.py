@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,14 +18,22 @@ router = APIRouter(prefix="/api/frame", tags=["frame"])
 
 
 @router.post("/poll", response_model=FramePollResponse)
-async def poll(payload: FramePollRequest, session: AsyncSession = Depends(get_session)) -> FramePollResponse:
+async def poll(
+    payload: FramePollRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> FramePollResponse:
     frame = await authenticate_frame(payload.frame_id, payload.secret, session)
 
     frame.last_seen_at = datetime.utcnow()
     frame.last_battery_percent = payload.battery_percent
     frame.last_battery_voltage = payload.battery_voltage
 
-    response = await resolve_next_for_frame(session, frame)
+    response = await resolve_next_for_frame(
+        session,
+        frame,
+        asset_base_url=str(request.base_url).rstrip("/"),
+    )
     response.low_battery_warning = payload.battery_percent < 20
     await session.commit()
     return response
