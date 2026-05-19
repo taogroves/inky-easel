@@ -139,6 +139,16 @@ export async function archiveInboxAction(frameId: string, itemId: string): Promi
   }
 }
 
+export async function unarchiveInboxAction(frameId: string, itemId: string): Promise<ActionResult> {
+  try {
+    await api(`/api/inbox/${itemId}/unarchive`, { method: "POST" });
+    revalidatePath(`/dashboard/frames/${frameId}/inbox`);
+    return { ok: true, data: undefined };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
 export async function deleteInboxAction(frameId: string, itemId: string): Promise<ActionResult> {
   try {
     await api(`/api/inbox/${itemId}`, { method: "DELETE" });

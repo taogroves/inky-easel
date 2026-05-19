@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import InboxList from "@/components/InboxList";
+import InboxSettingsForm from "@/components/InboxSettingsForm";
 import { ApiError, api, type FrameWithSecret, type InboxItem } from "@/lib/api";
 
 export default async function InboxPage(props: { params: Promise<{ id: string }> }) {
@@ -19,9 +20,9 @@ export default async function InboxPage(props: { params: Promise<{ id: string }>
         <h1 className="mt-3 font-display text-3xl">{frame.display_name} - inbox</h1>
         <p className="mt-2 max-w-prose text-sm text-ink-soft">
           New messages appear here. The "inbox" schedule item shows the oldest unread
-          one, then marks it as displayed. Repeats and automatic deletion are controlled
-          from the frame details page.
+          one, then marks it as displayed.
         </p>
+        <InboxSettingsForm frame={frame} />
         <InboxList frameId={frame.id} items={items} timezone={frame.timezone} />
       </div>
     );

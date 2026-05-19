@@ -119,6 +119,27 @@ async def archive_item(
     return item
 
 
+@router.post("/{item_id}/unarchive", response_model=InboxItemOut)
+async def unarchive_item(
+    item_id: str,
+    user: User = Depends(require_service_user),
+    session: AsyncSession = Depends(get_session),
+):
+    item = (
+        await session.execute(
+            select(InboxItem)
+            .join(Frame, Frame.id == InboxItem.recipient_frame_id)
+            .where(InboxItem.id == item_id, Frame.user_id == user.id)
+        )
+    ).scalar_one_or_none()
+    if item is None:
+        raise HTTPException(404, "Item not found")
+    item.archived = False
+    await session.commit()
+    await session.refresh(item)
+    return item
+
+
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_item(
     item_id: str,
