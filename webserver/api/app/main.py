@@ -37,11 +37,16 @@ log = logging.getLogger("inky-easel.api")
 logging.basicConfig(level=logging.INFO)
 
 
-async def _repair_binary_columns() -> None:
-    """Keep dev/self-hosted DBs aligned with the current binary column sizes."""
+async def _repair_schema() -> None:
+    """Keep dev/self-hosted DBs aligned with lightweight schema changes."""
     statements = [
         "ALTER TABLE ie_inbox_item MODIFY image_bytes LONGBLOB NULL",
         "ALTER TABLE ie_content_cache MODIFY payload LONGBLOB NOT NULL",
+        "ALTER TABLE ie_frame ADD COLUMN IF NOT EXISTS inbox_mode VARCHAR(16) NOT NULL DEFAULT 'open'",
+        "ALTER TABLE ie_frame ADD COLUMN IF NOT EXISTS inbox_password VARCHAR(120) NULL",
+        "ALTER TABLE ie_frame ADD COLUMN IF NOT EXISTS inbox_repeat_enabled BOOL NOT NULL DEFAULT 0",
+        "ALTER TABLE ie_frame ADD COLUMN IF NOT EXISTS inbox_delete_after_displays INT NULL",
+        "ALTER TABLE ie_inbox_item ADD COLUMN IF NOT EXISTS display_count INT NOT NULL DEFAULT 0",
     ]
     async with engine.begin() as conn:
         for stmt in statements:
@@ -98,7 +103,7 @@ def create_app() -> FastAPI:
             ]
             async with engine.begin() as conn:
                 await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn, tables=ie_tables))
-        await _repair_binary_columns()
+        await _repair_schema()
 
     return app
 

@@ -13,6 +13,7 @@ from ..auth import require_service_user
 from ..db import get_session
 from ..models import Frame, FrameState, User
 from ..schemas import FrameCreate, FrameOut, FramePublicOut, FrameSecretOut, FrameUpdate
+from ..services.timezones import infer_timezone
 
 router = APIRouter(prefix="/api/frames", tags=["frames"])
 
@@ -40,7 +41,7 @@ async def create_frame(
         display_name=payload.display_name,
         latitude=payload.latitude,
         longitude=payload.longitude,
-        timezone=payload.timezone,
+        timezone=infer_timezone(payload.latitude, payload.longitude, payload.timezone),
         display_type=payload.display_type,
         secret=secrets.token_urlsafe(32),
     )
@@ -55,6 +56,16 @@ async def create_frame(
     await session.commit()
     await session.refresh(frame)
     return frame
+
+
+@router.get("/timezone")
+async def get_timezone_for_location(
+    latitude: float,
+    longitude: float,
+    user: User = Depends(require_service_user),
+):
+    _ = user
+    return {"timezone": infer_timezone(latitude, longitude)}
 
 
 @router.get("/{frame_id}", response_model=FrameSecretOut)
@@ -83,7 +94,14 @@ async def update_frame(
     ).scalar_one_or_none()
     if frame is None:
         raise HTTPException(404, "Frame not found")
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    updates = payload.model_dump(exclude_unset=True)
+    if {"latitude", "longitude", "timezone"} & updates.keys():
+        latitude = updates.get("latitude", frame.latitude)
+        longitude = updates.get("longitude", frame.longitude)
+        updates["timezone"] = infer_timezone(latitude, longitude, updates.get("timezone", frame.timezone))
+    if "inbox_mode" in updates and updates["inbox_mode"] != "private":
+        updates["inbox_password"] = None
+    for field, value in updates.items():
         setattr(frame, field, value)
     await session.commit()
     await session.refresh(frame)

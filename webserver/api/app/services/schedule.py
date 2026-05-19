@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import secrets as _secrets
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import delete, select
@@ -42,6 +42,7 @@ from ..models import (
     User,
 )
 from ..schemas import FramePollResponse, PluginPayload, TextPayload
+from .timezones import localize_datetime
 
 
 @dataclass
@@ -86,6 +87,22 @@ async def _resolve_inbox(
             .limit(1)
         )
     ).scalar_one_or_none()
+    if item is None and frame.inbox_repeat_enabled:
+        filters = [
+            InboxItem.recipient_frame_id == frame.id,
+            InboxItem.archived.is_(False),
+            InboxItem.displayed_at.is_not(None),
+        ]
+        if frame.inbox_delete_after_displays:
+            filters.append(InboxItem.display_count < frame.inbox_delete_after_displays)
+        item = (
+            await session.execute(
+                select(InboxItem)
+                .where(*filters)
+                .order_by(InboxItem.displayed_at.asc(), InboxItem.created_at.asc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
 
     if item is None:
         jpeg = render_title_body(
@@ -103,10 +120,14 @@ async def _resolve_inbox(
             target,
             sender=item.sender_label or "Friend",
             text=item.text_body or "",
-            when=item.created_at,
+            when=localize_datetime(item.created_at, frame.timezone),
         )
 
+    item.display_count = (item.display_count or 0) + 1
     item.displayed_at = datetime.utcnow()
+    delete_after = frame.inbox_delete_after_displays
+    if delete_after and item.display_count >= delete_after:
+        await session.delete(item)
     return jpeg, {"kind": item.kind, "inbox_id": item.id}
 
 
@@ -119,7 +140,7 @@ async def _resolve_weather(frame: Frame, target: RenderTarget) -> bytes:
             accent="BLUE",
         )
     try:
-        data = await weather.fetch_weather(frame.latitude, frame.longitude)
+        data = await weather.fetch_weather(frame.latitude, frame.longitude, frame.timezone)
         return render_weather(target, data["current"], data["forecast"])
     except Exception as e:
         return render_title_body(target, "Local Weather", f"Could not fetch weather:\n{e}", accent="RED")
@@ -154,6 +175,8 @@ async def _resolve_plugin(
     if plugin is None:
         return None
 
+    now_utc = datetime.now(timezone.utc)
+    now_local = localize_datetime(now_utc, frame.timezone)
     context = dict(item.config or {})
     context.update({
         "frame_name": frame.name,
@@ -161,7 +184,8 @@ async def _resolve_plugin(
         "latitude": frame.latitude,
         "longitude": frame.longitude,
         "timezone": frame.timezone,
-        "now_iso": datetime.utcnow().isoformat() + "Z",
+        "now_iso": now_utc.isoformat().replace("+00:00", "Z"),
+        "now_local_iso": now_local.isoformat(),
     })
     return PluginPayload(code=plugin.code, context=context)
 

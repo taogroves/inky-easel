@@ -12,15 +12,25 @@ function fail(e: unknown): ActionResult<never> {
   return { ok: false, error: (e as Error).message ?? "Unknown error" };
 }
 
+function nullableString(value: FormDataEntryValue | null): string | null {
+  const text = String(value ?? "").trim();
+  return text || null;
+}
+
+function nullableNumber(value: FormDataEntryValue | null): number | null {
+  const text = String(value ?? "").trim();
+  return text ? Number(text) : null;
+}
+
 // ---------- Frames ----------
 
 export async function createFrameAction(formData: FormData): Promise<void> {
   const payload = {
     name: String(formData.get("name") ?? "").trim().toLowerCase(),
     display_name: String(formData.get("display_name") ?? "").trim(),
-    latitude: formData.get("latitude") ? Number(formData.get("latitude")) : null,
-    longitude: formData.get("longitude") ? Number(formData.get("longitude")) : null,
-    timezone: formData.get("timezone") ? String(formData.get("timezone")) : null,
+    latitude: nullableNumber(formData.get("latitude")),
+    longitude: nullableNumber(formData.get("longitude")),
+    timezone: nullableString(formData.get("timezone")),
     display_type: String(formData.get("display_type") ?? "inky_frame_7_spectra"),
   };
 
@@ -32,23 +42,28 @@ export async function createFrameAction(formData: FormData): Promise<void> {
   redirect(`/dashboard/frames/${frame.id}/setup`);
 }
 
-export async function updateFrameAction(frameId: string, formData: FormData): Promise<ActionResult> {
+export async function updateFrameAction(frameId: string, formData: FormData): Promise<ActionResult<FrameWithSecret>> {
   try {
     const payload: Record<string, unknown> = {};
     const dn = formData.get("display_name");
     if (dn) payload.display_name = String(dn);
-    const lat = formData.get("latitude");
-    if (lat) payload.latitude = Number(lat);
-    const lng = formData.get("longitude");
-    if (lng) payload.longitude = Number(lng);
-    const tz = formData.get("timezone");
-    if (tz) payload.timezone = String(tz);
+    if (formData.has("latitude")) payload.latitude = nullableNumber(formData.get("latitude"));
+    if (formData.has("longitude")) payload.longitude = nullableNumber(formData.get("longitude"));
+    if (formData.has("timezone")) payload.timezone = nullableString(formData.get("timezone"));
     const dt = formData.get("display_type");
     if (dt) payload.display_type = String(dt);
-    await api(`/api/frames/${frameId}`, { method: "PATCH", body: JSON.stringify(payload) });
+    if (formData.has("inbox_mode")) payload.inbox_mode = String(formData.get("inbox_mode") ?? "open");
+    if (formData.has("inbox_password")) payload.inbox_password = nullableString(formData.get("inbox_password"));
+    if (formData.has("inbox_repeat_enabled")) {
+      payload.inbox_repeat_enabled = formData.getAll("inbox_repeat_enabled").includes("on");
+    }
+    if (formData.has("inbox_delete_after_displays")) {
+      payload.inbox_delete_after_displays = nullableNumber(formData.get("inbox_delete_after_displays"));
+    }
+    const frame = await api<FrameWithSecret>(`/api/frames/${frameId}`, { method: "PATCH", body: JSON.stringify(payload) });
     revalidatePath(`/dashboard/frames/${frameId}`);
     revalidatePath("/dashboard");
-    return { ok: true, data: undefined };
+    return { ok: true, data: frame };
   } catch (e) {
     return fail(e);
   }
@@ -143,6 +158,7 @@ export async function sendMessageAction(payload: {
   image_base64?: string;
   image_mime?: string;
   sender_label?: string;
+  inbox_password?: string;
 }): Promise<ActionResult<InboxItem>> {
   try {
     const item = await api<InboxItem>("/api/inbox", {

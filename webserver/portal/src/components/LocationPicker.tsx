@@ -4,6 +4,8 @@ import "leaflet/dist/leaflet.css";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { browserTimeZone } from "@/lib/time";
+
 function formatCoord(v: number | null | undefined): string {
   if (v == null || Number.isNaN(v)) return "";
   return String(v);
@@ -14,11 +16,13 @@ type GeocodeHit = { lat: number; lng: number; label: string };
 type LocationPickerProps = {
   initialLatitude?: number | null;
   initialLongitude?: number | null;
+  initialTimezone?: string | null;
 };
 
 export default function LocationPicker({
   initialLatitude = null,
   initialLongitude = null,
+  initialTimezone = null,
 }: LocationPickerProps) {
   const mapHostRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<import("leaflet").Map | null>(null);
@@ -26,22 +30,61 @@ export default function LocationPicker({
   const leafletRef = useRef<typeof import("leaflet") | null>(null);
   const searchAbortRef = useRef<AbortController | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timezoneRequestRef = useRef(0);
+  const browserLocationRequestedRef = useRef(false);
 
   const [lat, setLat] = useState(() => formatCoord(initialLatitude));
   const [lng, setLng] = useState(() => formatCoord(initialLongitude));
+  const [timezone, setTimezone] = useState(initialTimezone ?? "");
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
+  const [timezoneBusy, setTimezoneBusy] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [hits, setHits] = useState<GeocodeHit[]>([]);
   const [highlight, setHighlight] = useState(-1);
   const [geoErr, setGeoErr] = useState<string | null>(null);
+  const [timezoneErr, setTimezoneErr] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState<string | null>(null);
+
+  const initialLat = Number(formatCoord(initialLatitude));
+  const initialLng = Number(formatCoord(initialLongitude));
+  const hasInitialPoint = Number.isFinite(initialLat) && Number.isFinite(initialLng);
+
+  const inferTimezoneFor = useCallback(async (latitude: number, longitude: number) => {
+    const requestId = timezoneRequestRef.current + 1;
+    timezoneRequestRef.current = requestId;
+    setTimezoneBusy(true);
+    setTimezoneErr(null);
+
+    try {
+      const params = new URLSearchParams({
+        latitude: String(latitude),
+        longitude: String(longitude),
+      });
+      const res = await fetch(`/api/timezone?${params.toString()}`);
+      const data = (await res.json()) as { timezone?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Timezone lookup failed");
+      if (requestId === timezoneRequestRef.current && data.timezone) {
+        setTimezone(data.timezone);
+      }
+    } catch (e) {
+      if (requestId === timezoneRequestRef.current) {
+        setTimezone((current) => current || browserTimeZone());
+        setTimezoneErr((e as Error).message || "Could not determine timezone.");
+      }
+    } finally {
+      if (requestId === timezoneRequestRef.current) {
+        setTimezoneBusy(false);
+      }
+    }
+  }, []);
 
   const applyCoords = useCallback(
     (latitude: number, longitude: number, opts?: { zoom?: number; panOnly?: boolean; label?: string }) => {
       setLat(latitude.toFixed(6));
       setLng(longitude.toFixed(6));
       if (opts?.label) setConfirmed(opts.label);
+      void inferTimezoneFor(latitude, longitude);
       const map = mapRef.current;
       const L = leafletRef.current;
       if (!map || !L) return;
@@ -52,6 +95,7 @@ export default function LocationPicker({
           const p = m.getLatLng();
           setLat(p.lat.toFixed(6));
           setLng(p.lng.toFixed(6));
+          void inferTimezoneFor(p.lat, p.lng);
           setConfirmed(`Pin at ${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`);
         });
         markerRef.current = m;
@@ -65,8 +109,55 @@ export default function LocationPicker({
       }
       requestAnimationFrame(() => map.invalidateSize());
     },
-    [],
+    [inferTimezoneFor],
   );
+
+  const useBrowserLocation = useCallback(() => {
+    setGeoErr(null);
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setGeoErr("Browser location is unavailable. Search or click the map instead.");
+      return;
+    }
+    setBusy(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setBusy(false);
+        const { latitude, longitude } = position.coords;
+        setTimezone((current) => current || browserTimeZone());
+        applyCoords(latitude, longitude, {
+          zoom: 11,
+          label: "Browser location",
+        });
+      },
+      () => {
+        setBusy(false);
+        setGeoErr("Browser location unavailable. Search or click the map instead.");
+      },
+      { enableHighAccuracy: false, maximumAge: 60 * 60 * 1000, timeout: 10000 },
+    );
+  }, [applyCoords]);
+
+  useEffect(() => {
+    if (!initialTimezone) {
+      setTimezone(browserTimeZone());
+    }
+  }, [initialTimezone]);
+
+  useEffect(() => {
+    if (hasInitialPoint && !initialTimezone) {
+      void inferTimezoneFor(initialLat, initialLng);
+    }
+  }, [hasInitialPoint, inferTimezoneFor, initialLat, initialLng, initialTimezone]);
+
+  function applyTypedCoords(nextLat = lat, nextLng = lng) {
+    const typedLat = Number(nextLat);
+    const typedLng = Number(nextLng);
+    if (!Number.isFinite(typedLat) || !Number.isFinite(typedLng)) return;
+    applyCoords(typedLat, typedLng, {
+      zoom: 12,
+      label: `Pin at ${typedLat.toFixed(4)}, ${typedLng.toFixed(4)}`,
+    });
+  }
 
   useEffect(() => {
     const el = mapHostRef.current;
@@ -107,6 +198,7 @@ export default function LocationPicker({
           const p = m.getLatLng();
           setLat(p.lat.toFixed(6));
           setLng(p.lng.toFixed(6));
+          void inferTimezoneFor(p.lat, p.lng);
           setConfirmed(`Pin at ${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`);
         });
         markerRef.current = m;
@@ -132,7 +224,13 @@ export default function LocationPicker({
       markerRef.current = null;
       leafletRef.current = null;
     };
-  }, [applyCoords, initialLatitude, initialLongitude]);
+  }, [applyCoords, inferTimezoneFor, initialLatitude, initialLongitude]);
+
+  useEffect(() => {
+    if (!mapReady || hasInitialPoint || browserLocationRequestedRef.current) return;
+    browserLocationRequestedRef.current = true;
+    useBrowserLocation();
+  }, [hasInitialPoint, mapReady, useBrowserLocation]);
 
   const fetchSuggestions = useCallback(async (q: string): Promise<GeocodeHit[]> => {
     searchAbortRef.current?.abort();
@@ -305,9 +403,18 @@ export default function LocationPicker({
         >
           {busy ? "Searching…" : "Search"}
         </button>
+        <button
+          type="button"
+          className="btn-secondary shrink-0 px-4 py-2"
+          disabled={!mapReady || busy}
+          onClick={useBrowserLocation}
+        >
+          Use browser location
+        </button>
       </div>
 
       {geoErr && <p className="text-xs text-red-700">{geoErr}</p>}
+      {timezoneErr && <p className="text-xs text-amber-700">{timezoneErr}</p>}
       {confirmed && !geoErr && (
         <p className="text-xs text-emerald-800">
           Location set: {confirmed}
@@ -337,6 +444,7 @@ export default function LocationPicker({
               setLat(e.target.value);
               setConfirmed(null);
             }}
+            onBlur={() => applyTypedCoords()}
             placeholder="Optional"
           />
         </div>
@@ -355,10 +463,17 @@ export default function LocationPicker({
               setLng(e.target.value);
               setConfirmed(null);
             }}
+            onBlur={() => applyTypedCoords()}
             placeholder="Optional"
           />
         </div>
       </div>
+
+      <input type="hidden" name="timezone" value={timezone} />
+      <p className="text-xs text-ink-soft">
+        Timezone: <span className="font-medium text-ink">{timezone || "Detecting..."}</span>
+        {timezoneBusy ? " (updating from location...)" : ""}
+      </p>
 
       <p className="text-xs text-ink-soft">
         Suggestions appear as you type; press Enter to select. You can also click the map or drag the

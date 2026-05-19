@@ -6,7 +6,7 @@ import { deletePluginAction, savePluginAction } from "@/lib/actions";
 import type { Plugin } from "@/lib/api";
 
 const TEMPLATE = `# context contains: frame_name, display_name, latitude, longitude,
-# timezone, now_iso, plus any item-level config you added in the schedule.
+# timezone, now_iso (UTC), now_local_iso, plus any item-level config you added in the schedule.
 import time
 
 def draw(graphics, width, height, context):

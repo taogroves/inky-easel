@@ -113,6 +113,10 @@ class Frame(Base):
     longitude: Mapped[Optional[float]] = mapped_column()
     timezone: Mapped[Optional[str]] = mapped_column(String(64))
     display_type: Mapped[str] = mapped_column(String(40), default="inky_frame_7_spectra")
+    inbox_mode: Mapped[str] = mapped_column(String(16), default="open")
+    inbox_password: Mapped[Optional[str]] = mapped_column(String(120))
+    inbox_repeat_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    inbox_delete_after_displays: Mapped[Optional[int]] = mapped_column(Integer)
     last_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     last_battery_percent: Mapped[Optional[int]] = mapped_column(Integer)
     last_battery_voltage: Mapped[Optional[float]] = mapped_column()
@@ -194,6 +198,7 @@ class InboxItem(Base):
     image_bytes: Mapped[Optional[bytes]] = mapped_column(LONGBLOB)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     displayed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    display_count: Mapped[int] = mapped_column(Integer, default=0)
     archived: Mapped[bool] = mapped_column(Boolean, default=False)
 
     recipient_frame: Mapped[Frame] = relationship(

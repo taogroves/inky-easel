@@ -19,9 +19,10 @@ export default async function InboxPage(props: { params: Promise<{ id: string }>
         <h1 className="mt-3 font-display text-3xl">{frame.display_name} - inbox</h1>
         <p className="mt-2 max-w-prose text-sm text-ink-soft">
           New messages appear here. The "inbox" schedule item shows the oldest unread
-          one, then marks it as displayed.
+          one, then marks it as displayed. Repeats and automatic deletion are controlled
+          from the frame details page.
         </p>
-        <InboxList frameId={frame.id} items={items} />
+        <InboxList frameId={frame.id} items={items} timezone={frame.timezone} />
       </div>
     );
   } catch (e) {

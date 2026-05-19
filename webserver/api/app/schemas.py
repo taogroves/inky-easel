@@ -2,16 +2,32 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
+
+
+def _utc_json(value: datetime) -> str:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    else:
+        value = value.astimezone(timezone.utc)
+    return value.isoformat().replace("+00:00", "Z")
+
+
+class ApiModel(BaseModel):
+    @field_serializer("*", when_used="json")
+    def serialize_datetimes(self, value: Any) -> Any:
+        if isinstance(value, datetime):
+            return _utc_json(value)
+        return value
 
 
 # ---------- Frame protocol ----------
 
 
-class FramePollRequest(BaseModel):
+class FramePollRequest(ApiModel):
     frame_id: str
     secret: str
     server_url: Optional[str] = None
@@ -20,18 +36,18 @@ class FramePollRequest(BaseModel):
     wakeup: Literal["rtc", "button", "power"] = "rtc"
 
 
-class TextPayload(BaseModel):
+class TextPayload(ApiModel):
     title: str = ""
     body: str = ""
     accent: str = "BLUE"
 
 
-class PluginPayload(BaseModel):
+class PluginPayload(ApiModel):
     code: str
     context: dict[str, Any] = Field(default_factory=dict)
 
 
-class FramePollResponse(BaseModel):
+class FramePollResponse(ApiModel):
     type: Literal["image", "text", "plugin", "sleep"] = "sleep"
     image_url: Optional[str] = None
     text: Optional[TextPayload] = None
@@ -43,7 +59,7 @@ class FramePollResponse(BaseModel):
 # ---------- Portal API ----------
 
 
-class FrameCreate(BaseModel):
+class FrameCreate(ApiModel):
     name: str = Field(..., min_length=3, max_length=64, pattern=r"^[a-z0-9-]+$")
     display_name: str = Field(..., min_length=1, max_length=120)
     latitude: Optional[float] = None
@@ -52,15 +68,19 @@ class FrameCreate(BaseModel):
     display_type: str = "inky_frame_7_spectra"
 
 
-class FrameUpdate(BaseModel):
+class FrameUpdate(ApiModel):
     display_name: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     timezone: Optional[str] = None
     display_type: Optional[str] = None
+    inbox_mode: Optional[Literal["open", "private", "closed"]] = None
+    inbox_password: Optional[str] = Field(default=None, max_length=120)
+    inbox_repeat_enabled: Optional[bool] = None
+    inbox_delete_after_displays: Optional[int] = Field(default=None, ge=1, le=100)
 
 
-class FrameOut(BaseModel):
+class FrameOut(ApiModel):
     id: str
     name: str
     display_name: str
@@ -68,6 +88,10 @@ class FrameOut(BaseModel):
     longitude: Optional[float]
     timezone: Optional[str]
     display_type: str
+    inbox_mode: str
+    inbox_password: Optional[str]
+    inbox_repeat_enabled: bool
+    inbox_delete_after_displays: Optional[int]
     last_seen_at: Optional[datetime]
     last_battery_percent: Optional[int]
     last_battery_voltage: Optional[float]
@@ -81,7 +105,7 @@ class FrameSecretOut(FrameOut):
     secret: str
 
 
-class ScheduleItemIn(BaseModel):
+class ScheduleItemIn(ApiModel):
     item_type: Literal["inbox", "weather", "xkcd", "bbc", "plugin", "static"]
     item_ref: Optional[str] = None
     config: Optional[dict[str, Any]] = None
@@ -96,11 +120,11 @@ class ScheduleItemOut(ScheduleItemIn):
         from_attributes = True
 
 
-class ScheduleReplace(BaseModel):
+class ScheduleReplace(ApiModel):
     items: list[ScheduleItemIn]
 
 
-class PluginIn(BaseModel):
+class PluginIn(ApiModel):
     name: str = Field(..., min_length=1, max_length=120)
     description: Optional[str] = None
     code: str
@@ -115,16 +139,17 @@ class PluginOut(PluginIn):
         from_attributes = True
 
 
-class InboxSend(BaseModel):
+class InboxSend(ApiModel):
     recipient_frame_name: str
     kind: Literal["text", "image"]
     text_body: Optional[str] = None
     image_base64: Optional[str] = None
     image_mime: Optional[str] = None
     sender_label: Optional[str] = None
+    inbox_password: Optional[str] = None
 
 
-class InboxItemOut(BaseModel):
+class InboxItemOut(ApiModel):
     id: str
     kind: str
     text_body: Optional[str]
@@ -132,13 +157,14 @@ class InboxItemOut(BaseModel):
     sender_label: Optional[str]
     created_at: datetime
     displayed_at: Optional[datetime]
+    display_count: int
     archived: bool
 
     class Config:
         from_attributes = True
 
 
-class FramePublicOut(BaseModel):
+class FramePublicOut(ApiModel):
     name: str
     display_name: str
 
@@ -146,7 +172,7 @@ class FramePublicOut(BaseModel):
         from_attributes = True
 
 
-class SetupBundleOut(BaseModel):
+class SetupBundleOut(ApiModel):
     frame: FrameSecretOut
     files: dict[str, str]
     server_url: str

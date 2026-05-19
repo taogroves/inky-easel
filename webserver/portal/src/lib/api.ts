@@ -72,6 +72,10 @@ export type Frame = {
   longitude: number | null;
   timezone: string | null;
   display_type: string;
+  inbox_mode: "open" | "private" | "closed";
+  inbox_password: string | null;
+  inbox_repeat_enabled: boolean;
+  inbox_delete_after_displays: number | null;
   last_seen_at: string | null;
   last_battery_percent: number | null;
   last_battery_voltage: number | null;
@@ -106,6 +110,7 @@ export type InboxItem = {
   sender_label: string | null;
   created_at: string;
   displayed_at: string | null;
+  display_count: number;
   archived: boolean;
 };
 

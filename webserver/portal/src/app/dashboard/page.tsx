@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
 import { api, type Frame } from "@/lib/api";
+import { parseApiDate } from "@/lib/time";
 
 function batteryBadge(pct: number | null): { label: string; cls: string } {
   if (pct == null) return { label: "no data", cls: "bg-ink/10 text-ink-soft" };
@@ -14,7 +15,7 @@ function batteryBadge(pct: number | null): { label: string; cls: string } {
 
 function relativeTime(iso: string | null): string {
   if (!iso) return "never";
-  const then = new Date(iso).getTime();
+  const then = parseApiDate(iso).getTime();
   const diff = Date.now() - then;
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "just now";

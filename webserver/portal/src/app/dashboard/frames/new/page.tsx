@@ -30,11 +30,6 @@ export default function NewFramePage() {
           <input id="display_name" name="display_name" className="input" required placeholder="The kitchen frame" />
         </div>
         <LocationPicker />
-
-        <div>
-          <label className="label" htmlFor="timezone">Timezone (optional)</label>
-          <input id="timezone" name="timezone" className="input" placeholder="Europe/London" />
-        </div>
         <div>
           <label className="label" htmlFor="display_type">Display size</label>
           <select id="display_type" name="display_type" className="input">

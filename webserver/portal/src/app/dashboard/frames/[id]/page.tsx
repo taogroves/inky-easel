@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import EditFrameForm from "@/components/EditFrameForm";
 import DangerZone from "@/components/DangerZone";
 import { ApiError, api, type FrameWithSecret } from "@/lib/api";
+import { formatDateTime } from "@/lib/time";
 
 export default async function FrameDetailPage(props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
@@ -36,10 +37,11 @@ export default async function FrameDetailPage(props: { params: Promise<{ id: str
         <div className="card">
           <h2 className="font-display text-xl">Status</h2>
           <dl className="mt-3 space-y-2 text-sm">
-            <div className="flex justify-between"><dt className="text-ink-soft">Last check-in</dt><dd>{frame.last_seen_at ?? "never"}</dd></div>
+            <div className="flex justify-between"><dt className="text-ink-soft">Last check-in</dt><dd>{formatDateTime(frame.last_seen_at, frame.timezone)}</dd></div>
             <div className="flex justify-between"><dt className="text-ink-soft">Battery</dt><dd>{frame.last_battery_percent != null ? `${frame.last_battery_percent}%` : "no data"}</dd></div>
             <div className="flex justify-between"><dt className="text-ink-soft">Voltage</dt><dd>{frame.last_battery_voltage != null ? `${frame.last_battery_voltage.toFixed(2)} V` : "—"}</dd></div>
             <div className="flex justify-between"><dt className="text-ink-soft">Display</dt><dd>{frame.display_type}</dd></div>
+            <div className="flex justify-between"><dt className="text-ink-soft">Inbox</dt><dd>{frame.inbox_mode}</dd></div>
             <div className="flex justify-between"><dt className="text-ink-soft">Location</dt><dd>{frame.latitude != null && frame.longitude != null ? `${frame.latitude.toFixed(2)}, ${frame.longitude.toFixed(2)}` : "—"}</dd></div>
             <div className="flex justify-between"><dt className="text-ink-soft">Timezone</dt><dd>{frame.timezone ?? "—"}</dd></div>
           </dl>

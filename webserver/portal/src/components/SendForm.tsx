@@ -18,6 +18,7 @@ export default function SendForm() {
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [senderLabel, setSenderLabel] = useState("");
+  const [inboxPassword, setInboxPassword] = useState("");
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -31,6 +32,7 @@ export default function SendForm() {
         recipient_frame_name: recipient.trim().toLowerCase(),
         kind,
         sender_label: senderLabel || undefined,
+        inbox_password: inboxPassword || undefined,
       };
       if (kind === "text") {
         payload.text_body = text;
@@ -49,6 +51,7 @@ export default function SendForm() {
       setMessage("Sent!");
       setText("");
       setFile(null);
+      setInboxPassword("");
     });
   }
 
@@ -61,6 +64,16 @@ export default function SendForm() {
       <div>
         <label className="label" htmlFor="sender">From (optional)</label>
         <input id="sender" className="input" value={senderLabel} onChange={(e) => setSenderLabel(e.target.value)} placeholder="Defaults to your display name" />
+      </div>
+      <div>
+        <label className="label" htmlFor="inbox-password">Inbox password (if needed)</label>
+        <input
+          id="inbox-password"
+          className="input"
+          value={inboxPassword}
+          onChange={(e) => setInboxPassword(e.target.value)}
+          placeholder="Ask your friend for this"
+        />
       </div>
       <div className="flex gap-3 text-sm">
         <label className="inline-flex items-center gap-2">

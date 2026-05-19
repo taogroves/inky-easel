@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import LocationPicker from "@/components/LocationPicker";
 import { buildBundleAction, rotateFrameSecretAction, updateFrameAction } from "@/lib/actions";
 import type { FrameWithSecret, SetupBundle } from "@/lib/api";
+import { formatDateTime } from "@/lib/time";
 
 type Step = "review" | "wifi" | "deploy" | "verify";
 
@@ -111,7 +112,7 @@ export default function SetupWizard({ frame: initialFrame }: { frame: FrameWithS
           if (json.last_seen_at && json.last_seen_at !== baseline) {
             setFrame({ ...frame, last_seen_at: json.last_seen_at });
             setVerifyStatus("ok");
-            setVerifyDetail(`Frame connected at ${new Date(json.last_seen_at).toLocaleString()}.`);
+            setVerifyDetail(`Frame connected at ${formatDateTime(json.last_seen_at, frame.timezone)}.`);
             return;
           }
         }
@@ -135,7 +136,8 @@ export default function SetupWizard({ frame: initialFrame }: { frame: FrameWithS
 
   async function commitLocation(formData: FormData) {
     startTransition(async () => {
-      await updateFrameAction(frame.id, formData);
+      const result = await updateFrameAction(frame.id, formData);
+      if (result.ok) setFrame(result.data);
     });
   }
 
@@ -156,11 +158,7 @@ export default function SetupWizard({ frame: initialFrame }: { frame: FrameWithS
             setStep("wifi");
           }}
         >
-          <LocationPicker initialLatitude={frame.latitude} initialLongitude={frame.longitude} />
-          <div>
-            <label className="label" htmlFor="timezone">Timezone</label>
-            <input id="timezone" name="timezone" className="input" defaultValue={frame.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone} />
-          </div>
+          <LocationPicker initialLatitude={frame.latitude} initialLongitude={frame.longitude} initialTimezone={frame.timezone} />
           <button type="submit" className="btn-primary">Continue &rarr;</button>
         </form>
       </Step>

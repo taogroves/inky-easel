@@ -52,6 +52,13 @@ async def send_inbox(
     ).scalar_one_or_none()
     if recipient is None:
         raise HTTPException(404, "Recipient frame not found")
+    if recipient.inbox_mode == "closed":
+        raise HTTPException(403, "This frame's inbox is closed")
+    if recipient.inbox_mode == "private":
+        expected = (recipient.inbox_password or "").strip()
+        provided = (payload.inbox_password or "").strip()
+        if not expected or provided != expected:
+            raise HTTPException(403, "Inbox password required")
 
     sender_label = payload.sender_label or user.name or user.email.split("@")[0]
 
