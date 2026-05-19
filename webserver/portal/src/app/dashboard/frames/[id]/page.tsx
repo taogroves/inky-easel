@@ -6,6 +6,11 @@ import DangerZone from "@/components/DangerZone";
 import { ApiError, api, type FrameWithSecret } from "@/lib/api";
 import { formatDateTime } from "@/lib/time";
 
+function statusLabel(status: FrameWithSecret["connection_status"]): string {
+  if (status === "awaiting_first_check_in") return "awaiting first check-in";
+  return status;
+}
+
 export default async function FrameDetailPage(props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
   let frame: FrameWithSecret;
@@ -37,7 +42,10 @@ export default async function FrameDetailPage(props: { params: Promise<{ id: str
         <div className="card">
           <h2 className="font-display text-xl">Status</h2>
           <dl className="mt-3 space-y-2 text-sm">
+            <div className="flex justify-between"><dt className="text-ink-soft">Connection</dt><dd className={frame.connection_status === "disconnected" ? "text-red-800" : ""}>{statusLabel(frame.connection_status)}</dd></div>
             <div className="flex justify-between"><dt className="text-ink-soft">Last check-in</dt><dd>{formatDateTime(frame.last_seen_at, frame.timezone)}</dd></div>
+            <div className="flex justify-between"><dt className="text-ink-soft">Next expected poll</dt><dd>{formatDateTime(frame.next_expected_poll_at, frame.timezone)}</dd></div>
+            <div className="flex justify-between"><dt className="text-ink-soft">Disconnects after</dt><dd>{formatDateTime(frame.disconnected_after, frame.timezone)}</dd></div>
             <div className="flex justify-between"><dt className="text-ink-soft">Battery</dt><dd>{frame.last_battery_percent != null ? `${frame.last_battery_percent}%` : "no data"}</dd></div>
             <div className="flex justify-between"><dt className="text-ink-soft">Voltage</dt><dd>{frame.last_battery_voltage != null ? `${frame.last_battery_voltage.toFixed(2)} V` : "—"}</dd></div>
             <div className="flex justify-between"><dt className="text-ink-soft">Display</dt><dd>{frame.display_type}</dd></div>

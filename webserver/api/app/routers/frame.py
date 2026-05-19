@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy import delete, select
@@ -17,6 +17,10 @@ from ..services.schedule import resolve_next_for_frame
 router = APIRouter(prefix="/api/frame", tags=["frame"])
 
 
+def _poll_grace_minutes(sleep_minutes: int) -> int:
+    return max(5, min(30, int(sleep_minutes * 0.25)))
+
+
 @router.post("/poll", response_model=FramePollResponse)
 async def poll(
     payload: FramePollRequest,
@@ -25,7 +29,8 @@ async def poll(
 ) -> FramePollResponse:
     frame = await authenticate_frame(payload.frame_id, payload.secret, session)
 
-    frame.last_seen_at = datetime.utcnow()
+    now = datetime.utcnow()
+    frame.last_seen_at = now
     frame.last_battery_percent = payload.battery_percent
     frame.last_battery_voltage = payload.battery_voltage
 
@@ -35,6 +40,11 @@ async def poll(
         asset_base_url=(payload.server_url or str(request.base_url)).rstrip("/"),
     )
     response.low_battery_warning = payload.battery_percent < 20
+    sleep_minutes = max(1, int(response.sleep_minutes or 1))
+    frame.next_expected_poll_at = now + timedelta(minutes=sleep_minutes)
+    frame.disconnected_after = frame.next_expected_poll_at + timedelta(
+        minutes=_poll_grace_minutes(sleep_minutes)
+    )
     await session.commit()
     return response
 

@@ -118,6 +118,8 @@ class Frame(Base):
     inbox_repeat_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     inbox_delete_after_displays: Mapped[Optional[int]] = mapped_column(Integer)
     last_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    next_expected_poll_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    disconnected_after: Mapped[Optional[datetime]] = mapped_column(DateTime)
     last_battery_percent: Mapped[Optional[int]] = mapped_column(Integer)
     last_battery_voltage: Mapped[Optional[float]] = mapped_column()
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
@@ -136,6 +138,14 @@ class Frame(Base):
         order_by="InboxItem.created_at",
         foreign_keys="InboxItem.recipient_frame_id",
     )
+
+    @property
+    def connection_status(self) -> str:
+        if self.last_seen_at is None:
+            return "awaiting_first_check_in"
+        if self.disconnected_after is not None and datetime.utcnow() > self.disconnected_after:
+            return "disconnected"
+        return "connected"
 
 
 class FrameState(Base):

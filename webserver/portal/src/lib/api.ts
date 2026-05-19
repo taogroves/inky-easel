@@ -77,6 +77,9 @@ export type Frame = {
   inbox_repeat_enabled: boolean;
   inbox_delete_after_displays: number | null;
   last_seen_at: string | null;
+  next_expected_poll_at: string | null;
+  disconnected_after: string | null;
+  connection_status: "connected" | "disconnected" | "awaiting_first_check_in";
   last_battery_percent: number | null;
   last_battery_voltage: number | null;
   created_at: string;

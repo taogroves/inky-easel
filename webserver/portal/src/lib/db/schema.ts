@@ -106,6 +106,8 @@ export const frame = mysqlTable(
     inboxRepeatEnabled: boolean("inbox_repeat_enabled").default(false).notNull(),
     inboxDeleteAfterDisplays: int("inbox_delete_after_displays"),
     lastSeenAt: datetime("last_seen_at"),
+    nextExpectedPollAt: datetime("next_expected_poll_at"),
+    disconnectedAfter: datetime("disconnected_after"),
     lastBatteryPercent: int("last_battery_percent"),
     lastBatteryVoltage: double("last_battery_voltage"),
     createdAt: datetime("created_at").notNull(),

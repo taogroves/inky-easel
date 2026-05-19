@@ -93,6 +93,9 @@ class FrameOut(ApiModel):
     inbox_repeat_enabled: bool
     inbox_delete_after_displays: Optional[int]
     last_seen_at: Optional[datetime]
+    next_expected_poll_at: Optional[datetime]
+    disconnected_after: Optional[datetime]
+    connection_status: Literal["connected", "disconnected", "awaiting_first_check_in"]
     last_battery_percent: Optional[int]
     last_battery_voltage: Optional[float]
     created_at: datetime
