@@ -59,6 +59,7 @@ services:
       NEXT_PUBLIC_BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
       API_BASE_URL: http://api:8000
       SERVICE_SECRET: ${SERVICE_SECRET:-dev-service-secret}
+      NOMINATIM_USER_AGENT: ${NOMINATIM_USER_AGENT:-InkyEaselPortal/1.0}
     ports:
       - "${PORTAL_PORT:-3000}:3000"
 

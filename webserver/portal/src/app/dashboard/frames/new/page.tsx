@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import LocationPicker from "@/components/LocationPicker";
 import { createFrameAction } from "@/lib/actions";
 
 const DISPLAYS = [
@@ -28,16 +29,8 @@ export default function NewFramePage() {
           <label className="label" htmlFor="display_name">Display name</label>
           <input id="display_name" name="display_name" className="input" required placeholder="The kitchen frame" />
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="label" htmlFor="latitude">Latitude</label>
-            <input id="latitude" name="latitude" className="input" type="number" step="0.0001" placeholder="51.5074" />
-          </div>
-          <div>
-            <label className="label" htmlFor="longitude">Longitude</label>
-            <input id="longitude" name="longitude" className="input" type="number" step="0.0001" placeholder="-0.1278" />
-          </div>
-        </div>
+        <LocationPicker />
+
         <div>
           <label className="label" htmlFor="timezone">Timezone (optional)</label>
           <input id="timezone" name="timezone" className="input" placeholder="Europe/London" />

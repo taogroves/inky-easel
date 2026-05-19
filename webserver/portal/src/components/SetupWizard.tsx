@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 
+import LocationPicker from "@/components/LocationPicker";
 import { buildBundleAction, rotateFrameSecretAction, updateFrameAction } from "@/lib/actions";
 import type { FrameWithSecret, SetupBundle } from "@/lib/api";
 
@@ -127,21 +128,7 @@ export default function SetupWizard({ frame: initialFrame }: { frame: FrameWithS
             setStep("wifi");
           }}
         >
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label" htmlFor="latitude">Latitude</label>
-              <input id="latitude" name="latitude" className="input" type="number" step="0.0001" defaultValue={frame.latitude ?? ""} />
-            </div>
-            <div>
-              <label className="label" htmlFor="longitude">Longitude</label>
-              <input id="longitude" name="longitude" className="input" type="number" step="0.0001" defaultValue={frame.longitude ?? ""} />
-            </div>
-          </div>
-          <p className="text-xs text-ink-soft">
-            Used for the weather schedule item. Drop a pin on{" "}
-            <a className="underline" href="https://www.openstreetmap.org/" target="_blank" rel="noreferrer">OpenStreetMap</a>{" "}
-            and copy the coordinates.
-          </p>
+          <LocationPicker initialLatitude={frame.latitude} initialLongitude={frame.longitude} />
           <div>
             <label className="label" htmlFor="timezone">Timezone</label>
             <input id="timezone" name="timezone" className="input" defaultValue={frame.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone} />

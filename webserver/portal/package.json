@@ -12,6 +12,7 @@
   "dependencies": {
     "better-auth": "^1.6.11",
     "drizzle-orm": "^0.45.2",
+    "leaflet": "^1.9.4",
     "mysql2": "^3.22.0",
     "next": "^16.2.6",
     "react": "^19.2.0",
@@ -19,6 +20,7 @@
     "zod": "^4.4.0"
   },
   "devDependencies": {
+    "@types/leaflet": "^1.9.21",
     "@types/node": "^22.19.7",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
