@@ -114,16 +114,15 @@ async def _resolve_weather(frame: Frame, target: RenderTarget) -> bytes:
     if frame.latitude is None or frame.longitude is None:
         return render_title_body(
             target,
-            title="Weather",
+            title="Local Weather",
             body="No location configured.\nUpdate it in the portal.",
             accent="BLUE",
         )
     try:
         data = await weather.fetch_weather(frame.latitude, frame.longitude)
-        location = data.get("timezone") or f"{frame.latitude:.1f},{frame.longitude:.1f}"
-        return render_weather(target, location, data["current"], data["forecast"])
+        return render_weather(target, data["current"], data["forecast"])
     except Exception as e:
-        return render_title_body(target, "Weather", f"Could not fetch weather:\n{e}", accent="RED")
+        return render_title_body(target, "Local Weather", f"Could not fetch weather:\n{e}", accent="RED")
 
 
 async def _resolve_xkcd(target: RenderTarget) -> bytes:

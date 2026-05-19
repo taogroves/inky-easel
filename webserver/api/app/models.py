@@ -19,12 +19,12 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
-    LargeBinary,
     String,
     Text,
     UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.mysql import LONGBLOB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -191,7 +191,7 @@ class InboxItem(Base):
     kind: Mapped[str] = mapped_column(String(16))  # "text" | "image"
     text_body: Mapped[Optional[str]] = mapped_column(Text)
     image_mime: Mapped[Optional[str]] = mapped_column(String(64))
-    image_bytes: Mapped[Optional[bytes]] = mapped_column(LargeBinary)
+    image_bytes: Mapped[Optional[bytes]] = mapped_column(LONGBLOB)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     displayed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     archived: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -208,6 +208,6 @@ class ContentCache(Base):
 
     token: Mapped[str] = mapped_column(String(64), primary_key=True)
     mime: Mapped[str] = mapped_column(String(64), default="image/jpeg")
-    payload: Mapped[bytes] = mapped_column(LargeBinary)
+    payload: Mapped[bytes] = mapped_column(LONGBLOB)
     expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

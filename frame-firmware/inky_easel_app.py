@@ -70,12 +70,7 @@ def _wakeup_reason():
 def _deep_sleep(minutes):
     minutes = max(1, int(minutes))
     print("Sleeping for", minutes, "minutes")
-    try:
-        inky_frame.sleep_for(minutes)
-    except Exception as e:
-        print("sleep_for failed, falling back:", e)
-        time.sleep(60 * minutes)
-        machine.reset()
+    ih.sleep(minutes)
 
 
 def _show_error_then_next(graphics, width, height, message):
@@ -90,6 +85,7 @@ def _connect_wifi():
     except ImportError:
         print("Missing secrets.py")
         return False
+    ih.warn_led(False)
     ih.network_connect(WIFI_SSID, WIFI_PASSWORD)
     import network
     return network.WLAN(network.STA_IF).isconnected()
@@ -101,7 +97,11 @@ def _render(graphics, width, height, response):
         url = response.get("image_url")
         if not url:
             raise RuntimeError("No image URL")
-        frame_client.download_jpeg(url)
+        ih.network_led(100)
+        try:
+            frame_client.download_jpeg(url)
+        finally:
+            ih.stop_network_led()
         scene.clear(graphics)
         frame_client.render_image(graphics)
     elif kind == "text":
@@ -125,8 +125,12 @@ def _render(graphics, width, height, response):
 
 def main():
     time.sleep(0.3)
+    ih.all_leds_off()
 
-    inky_frame.pcf_to_pico_rtc()
+    try:
+        inky_frame.pcf_to_pico_rtc()
+    except Exception as e:
+        print("RTC sync failed:", e)
 
     sd_ok = _mount_sd()
     if not sd_ok:
@@ -159,14 +163,18 @@ def main():
         return
 
     try:
+        ih.network_led(100)
         response = frame_client.poll(SERVER_URL, FRAME_ID, FRAME_SECRET, voltage, percent, wakeup)
     except frame_client.PollError as e:
+        ih.stop_network_led()
         print("Poll failed:", e)
         if "Bad JSON" in str(e):
             _show_error_then_next(graphics, width, height, "Bad server response")
         else:
             _show_error_then_next(graphics, width, height, "Server unreachable")
         return
+    finally:
+        ih.stop_network_led()
 
     try:
         _render(graphics, width, height, response)
@@ -178,12 +186,15 @@ def main():
     if battery.is_low(percent):
         scene.draw_low_battery_overlay(graphics, width, percent)
 
-    inky_frame.led_busy.on()
-    graphics.update()
-    inky_frame.led_busy.off()
+    try:
+        inky_frame.led_busy.on()
+        graphics.update()
+    finally:
+        inky_frame.led_busy.off()
     gc.collect()
 
     sleep_minutes = int(response.get("sleep_minutes") or DEFAULT_SLEEP_MINUTES)
+    print("Server requested sleep_minutes =", sleep_minutes)
     _deep_sleep(sleep_minutes)
 
 

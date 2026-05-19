@@ -4,6 +4,7 @@ import os
 import time
 
 import inky_frame
+import machine
 import network
 from machine import PWM, Pin, Timer
 from pcf85063a import PCF85063A
@@ -61,18 +62,40 @@ def stop_network_led():
     network_led_pwm.duty_u16(0)
 
 
-def sleep(t):
-    # Time to have a little nap until the next update
-    rtc.clear_timer_flag()
-    rtc.set_timer(t, ttp=rtc.TIMER_TICK_1_OVER_60HZ)
-    rtc.enable_timer_interrupt(True)
+def warn_led(on):
+    led_warn.value(1 if on else 0)
 
-    # Set the HOLD VSYS pin to an input
-    # this allows the device to go into sleep mode when on battery power.
-    hold_vsys_en_pin.init(Pin.IN)
+
+def all_leds_off():
+    stop_network_led()
+    warn_led(False)
+    clear_button_leds()
+    try:
+        inky_frame.led_busy.off()
+    except AttributeError:
+        pass
+
+
+def sleep(minutes):
+    minutes = max(1, int(minutes))
+    all_leds_off()
+
+    try:
+        # Time to have a little nap until the next update. The 1/60Hz tick
+        # makes the timer value minutes, not seconds.
+        rtc.clear_timer_flag()
+        rtc.set_timer(minutes, ttp=rtc.TIMER_TICK_1_OVER_60HZ)
+        rtc.enable_timer_interrupt(True)
+
+        # Set the HOLD VSYS pin to an input. This allows the device to power
+        # down on battery and wake from the RTC interrupt.
+        hold_vsys_en_pin.init(Pin.IN)
+    except Exception as e:
+        print("RTC sleep setup failed:", e)
 
     # Regular time.sleep for those powering from USB
-    time.sleep(60 * t)
+    time.sleep(60 * minutes)
+    machine.reset()
 
 
 # Turns off the button LEDs
@@ -105,12 +128,11 @@ def network_connect(SSID, PSK):
         time.sleep(1)
 
     stop_network_led()
-    network_led_pwm.duty_u16(30000)
 
     # Handle connection error. Switches the Warn LED on.
     if wlan.status() != 3:
         stop_network_led()
-        led_warn.on()
+        warn_led(True)
 
 
 state = {"run": None}

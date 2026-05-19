@@ -5,10 +5,12 @@ from __future__ import annotations
 import base64
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from PIL import UnidentifiedImageError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_service_user
+from ..content.renderer import prepare_inbox_image, target_for
 from ..db import get_session
 from ..models import Frame, InboxItem, User
 from ..schemas import InboxItemOut, InboxSend
@@ -73,8 +75,13 @@ async def send_inbox(
             raise HTTPException(422, "image_base64 is not valid base64")
         if len(data) > MAX_IMAGE_BYTES:
             raise HTTPException(413, f"Image too large (>{MAX_IMAGE_BYTES // 1024} KB)")
-        item.image_bytes = data
-        item.image_mime = payload.image_mime or "image/jpeg"
+        try:
+            item.image_bytes = prepare_inbox_image(data, target_for(recipient.display_type))
+        except UnidentifiedImageError:
+            raise HTTPException(422, "image_base64 is not a supported image")
+        except Exception as e:
+            raise HTTPException(422, f"Could not process image: {e}")
+        item.image_mime = "image/jpeg"
     else:  # pragma: no cover - pydantic enforces this
         raise HTTPException(422, "Unknown kind")
 

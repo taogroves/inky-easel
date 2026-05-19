@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Iterable
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 INKY_PALETTE = {
     "BLACK": (0, 0, 0),
@@ -97,6 +97,30 @@ def _new_canvas(target: RenderTarget, background: str = "WHITE") -> tuple[Image.
     return img, ImageDraw.Draw(img)
 
 
+def fit_image_to_target(image_bytes: bytes, target: RenderTarget) -> Image.Image:
+    inbound = Image.open(io.BytesIO(image_bytes))
+    inbound = ImageOps.exif_transpose(inbound)
+    if inbound.mode in {"RGBA", "LA"} or (inbound.mode == "P" and "transparency" in inbound.info):
+        transparent = inbound.convert("RGBA")
+        background = Image.new("RGBA", transparent.size, INKY_PALETTE["WHITE"] + (255,))
+        background.alpha_composite(transparent)
+        inbound = background.convert("RGB")
+    else:
+        inbound = inbound.convert("RGB")
+
+    inbound.thumbnail((target.width, target.height), Image.LANCZOS)
+
+    img = Image.new("RGB", (target.width, target.height), INKY_PALETTE["WHITE"])
+    ox = (target.width - inbound.width) // 2
+    oy = (target.height - inbound.height) // 2
+    img.paste(inbound, (ox, oy))
+    return img
+
+
+def prepare_inbox_image(image_bytes: bytes, target: RenderTarget) -> bytes:
+    return _to_jpeg(fit_image_to_target(image_bytes, target))
+
+
 def render_title_body(target: RenderTarget, title: str, body: str, accent: str = "BLUE",
                        footer: str | None = None) -> bytes:
     img, draw = _new_canvas(target)
@@ -139,13 +163,7 @@ def render_inbox_text(target: RenderTarget, sender: str, text: str, when: dateti
 
 
 def render_inbox_image(target: RenderTarget, image_bytes: bytes, sender: str | None) -> bytes:
-    inbound = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    inbound.thumbnail((target.width, target.height), Image.LANCZOS)
-
-    img = Image.new("RGB", (target.width, target.height), INKY_PALETTE["WHITE"])
-    ox = (target.width - inbound.width) // 2
-    oy = (target.height - inbound.height) // 2
-    img.paste(inbound, (ox, oy))
+    img = fit_image_to_target(image_bytes, target)
 
     if sender:
         draw = ImageDraw.Draw(img)
@@ -190,13 +208,13 @@ def render_xkcd(target: RenderTarget, image_bytes: bytes, title: str, alt: str |
     return _to_jpeg(img)
 
 
-def render_weather(target: RenderTarget, location: str, current: dict, forecast: Iterable[dict]) -> bytes:
+def render_weather(target: RenderTarget, current: dict, forecast: Iterable[dict]) -> bytes:
     img, draw = _new_canvas(target)
 
     bar_h = 64
     draw.rectangle((0, 0, target.width, bar_h), fill=INKY_PALETTE["BLUE"])
     title_font = _load_font(32, bold=True)
-    draw.text((20, 14), f"Weather - {location}", fill=INKY_PALETTE["WHITE"], font=title_font)
+    draw.text((20, 14), f"Local Weather", fill=INKY_PALETTE["WHITE"], font=title_font)
 
     big_font = _load_font(96, bold=True)
     label_font = _load_font(20)

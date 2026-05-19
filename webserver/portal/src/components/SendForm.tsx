@@ -85,7 +85,7 @@ export default function SendForm() {
             className="input"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           />
-          {file && <p className="mt-1 text-xs text-ink-soft">Selected: {file.name} ({Math.round(file.size / 1024)} KB)</p>}
+          {file && <p className="mt-1 text-xs text-ink-soft">Selected: {file.name} ({Math.round(file.size / 1024)} KB). It will be resized for the recipient frame.</p>}
         </div>
       )}
       {error && <p className="text-sm text-red-700">{error}</p>}
