@@ -78,6 +78,12 @@ def _deep_sleep(minutes):
         machine.reset()
 
 
+def _show_error_then_next(graphics, width, height, message):
+    scene.draw_error_screen(graphics, width, height, message)
+    graphics.update()
+    _deep_sleep(1)
+
+
 def _connect_wifi():
     try:
         from secrets import WIFI_PASSWORD, WIFI_SSID
@@ -94,8 +100,7 @@ def _render(graphics, width, height, response):
     if kind == "image":
         url = response.get("image_url")
         if not url:
-            scene.draw_error_screen(graphics, width, height, "No image URL")
-            return
+            raise RuntimeError("No image URL")
         frame_client.download_jpeg(url)
         scene.clear(graphics)
         frame_client.render_image(graphics)
@@ -113,11 +118,7 @@ def _render(graphics, width, height, response):
         payload = response.get("plugin") or {}
         code = payload.get("code", "")
         context = payload.get("context") or {}
-        try:
-            frame_client.run_plugin(graphics, width, height, code, context)
-        except Exception as e:
-            print("Plugin failed:", e)
-            scene.draw_error_screen(graphics, width, height, "Plugin error")
+        frame_client.run_plugin(graphics, width, height, code, context)
     else:
         return
 
@@ -154,9 +155,7 @@ def main():
     wakeup = _wakeup_reason()
 
     if not _connect_wifi():
-        scene.draw_error_screen(graphics, width, height, "Wi-Fi unavailable")
-        graphics.update()
-        _deep_sleep(15)
+        _show_error_then_next(graphics, width, height, "Wi-Fi unavailable")
         return
 
     try:
@@ -164,14 +163,17 @@ def main():
     except frame_client.PollError as e:
         print("Poll failed:", e)
         if "Bad JSON" in str(e):
-            scene.draw_error_screen(graphics, width, height, "Bad server response")
+            _show_error_then_next(graphics, width, height, "Bad server response")
         else:
-            scene.draw_error_screen(graphics, width, height, "Server unreachable")
-        graphics.update()
-        _deep_sleep(15)
+            _show_error_then_next(graphics, width, height, "Server unreachable")
         return
 
-    _render(graphics, width, height, response)
+    try:
+        _render(graphics, width, height, response)
+    except Exception as e:
+        print("Render failed:", e)
+        _show_error_then_next(graphics, width, height, "Render failed")
+        return
 
     if battery.is_low(percent):
         scene.draw_low_battery_overlay(graphics, width, percent)

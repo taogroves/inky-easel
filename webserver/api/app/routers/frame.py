@@ -32,7 +32,7 @@ async def poll(
     response = await resolve_next_for_frame(
         session,
         frame,
-        asset_base_url=str(request.base_url).rstrip("/"),
+        asset_base_url=(payload.server_url or str(request.base_url)).rstrip("/"),
     )
     response.low_battery_warning = payload.battery_percent < 20
     await session.commit()

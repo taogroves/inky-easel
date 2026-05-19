@@ -61,6 +61,7 @@ fetch images from that LAN URL.
 {
   "frame_id": "<uuid>",
   "secret": "<token>",
+  "server_url": "http://<lan-ip>:8000",
   "battery_voltage": 3.92,
   "battery_percent": 84,
   "wakeup": "rtc"

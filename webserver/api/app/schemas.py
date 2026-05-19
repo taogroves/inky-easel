@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 class FramePollRequest(BaseModel):
     frame_id: str
     secret: str
+    server_url: Optional[str] = None
     battery_voltage: float = 0.0
     battery_percent: int = 0
     wakeup: Literal["rtc", "button", "power"] = "rtc"

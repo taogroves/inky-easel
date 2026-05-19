@@ -20,12 +20,18 @@ import json
 import os
 
 try:
+    import socket
+except ImportError:
+    socket = None
+
+try:
     from urllib import urequest as _urequest
 except ImportError:
     import urequest as _urequest
 
 CONTENT_PATH = "/sd/_content.jpg"
 PLUGIN_PATH = "/sd/_plugin.py"
+HTTP_TIMEOUT_SECONDS = 20
 
 
 class PollError(Exception):
@@ -45,9 +51,15 @@ def _preview(text, limit=120):
     return text
 
 
+def _set_timeout():
+    if socket and hasattr(socket, "setdefaulttimeout"):
+        socket.setdefaulttimeout(HTTP_TIMEOUT_SECONDS)
+
+
 def _http_post_json(url, payload):
     body = json.dumps(payload).encode("utf-8")
     print("POST", url)
+    _set_timeout()
     sock = _urequest.urlopen(
         url,
         data=body,
@@ -74,6 +86,7 @@ def poll(server_url, frame_id, secret, battery_voltage, battery_percent, wakeup)
     payload = {
         "frame_id": frame_id,
         "secret": secret,
+        "server_url": server_url.rstrip("/"),
         "battery_voltage": round(battery_voltage, 3),
         "battery_percent": battery_percent,
         "wakeup": wakeup,
@@ -87,6 +100,8 @@ def poll(server_url, frame_id, secret, battery_voltage, battery_percent, wakeup)
 
 
 def download_jpeg(url, dest=CONTENT_PATH):
+    print("GET", url)
+    _set_timeout()
     sock = _urequest.urlopen(url)
     try:
         chunk = bytearray(1024)

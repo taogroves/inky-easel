@@ -37,7 +37,7 @@ async def fetch_weather(latitude: float, longitude: float, timezone: str | None 
         "longitude": longitude,
         "current": "temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m",
         "daily": "temperature_2m_max,temperature_2m_min,weather_code",
-        "timezone": timezone or "auto",
+        "timezone": "auto",
         "forecast_days": 4,
     }
     async with httpx.AsyncClient(timeout=15) as client:
@@ -68,4 +68,4 @@ async def fetch_weather(latitude: float, longitude: float, timezone: str | None 
             "code": daily.get("weather_code", [0])[i] if i < len(daily.get("weather_code", [])) else 0,
         })
 
-    return {"current": current, "forecast": forecast}
+    return {"current": current, "forecast": forecast, "timezone": data.get("timezone")}
