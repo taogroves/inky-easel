@@ -46,6 +46,7 @@ async def replace_schedule(
     session: AsyncSession = Depends(get_session),
 ):
     frame = await _owned_frame(frame_id, user.id, session)
+    frame.schedule_mode = payload.schedule_mode
 
     await session.execute(delete(ScheduleItem).where(ScheduleItem.frame_id == frame_id))
     await session.flush()
@@ -58,6 +59,7 @@ async def replace_schedule(
             item_ref=item.item_ref,
             config=item.config,
             sleep_minutes=item.sleep_minutes,
+            start_minute=item.start_minute,
         )
         for idx, item in enumerate(payload.items)
     ]

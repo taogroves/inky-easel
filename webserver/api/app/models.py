@@ -113,6 +113,7 @@ class Frame(Base):
     longitude: Mapped[Optional[float]] = mapped_column()
     timezone: Mapped[Optional[str]] = mapped_column(String(64))
     display_type: Mapped[str] = mapped_column(String(40), default="inky_frame_7_spectra")
+    schedule_mode: Mapped[str] = mapped_column(String(16), default="relative")
     inbox_mode: Mapped[str] = mapped_column(String(16), default="open")
     inbox_password: Mapped[Optional[str]] = mapped_column(String(120))
     inbox_repeat_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -173,6 +174,7 @@ class ScheduleItem(Base):
     item_ref: Mapped[Optional[str]] = mapped_column(String(255))
     config: Mapped[Optional[dict]] = mapped_column(JSON)
     sleep_minutes: Mapped[int] = mapped_column(Integer, default=60)
+    start_minute: Mapped[Optional[int]] = mapped_column(Integer)
 
     frame: Mapped[Frame] = relationship(back_populates="schedule_items")
 

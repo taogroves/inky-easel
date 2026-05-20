@@ -190,6 +190,34 @@ async def _resolve_plugin(
     return PluginPayload(code=plugin.code, context=context)
 
 
+def _item_start_minute(item: ScheduleItem) -> int:
+    return max(0, min(1439, item.start_minute if item.start_minute is not None else 0))
+
+
+def _minutes_until(next_start: int, current_minute: int) -> int:
+    diff = next_start - current_minute
+    if diff <= 0:
+        diff += 1440
+    return max(1, diff)
+
+
+def _calendar_item_for_now(frame: Frame, schedule: list[ScheduleItem]) -> tuple[ScheduleItem, int, int]:
+    now_local = localize_datetime(datetime.utcnow(), frame.timezone)
+    current_minute = now_local.hour * 60 + now_local.minute
+    ordered = sorted(schedule, key=lambda item: (_item_start_minute(item), item.position))
+
+    current_idx = len(ordered) - 1
+    for idx, item in enumerate(ordered):
+        if _item_start_minute(item) <= current_minute:
+            current_idx = idx
+        else:
+            break
+
+    item = ordered[current_idx]
+    next_item = ordered[(current_idx + 1) % len(ordered)]
+    return item, _minutes_until(_item_start_minute(next_item), current_minute), current_idx
+
+
 async def resolve_next_for_frame(
     session: AsyncSession, frame: Frame, asset_base_url: str | None = None
 ) -> FramePollResponse:
@@ -219,14 +247,18 @@ async def resolve_next_for_frame(
             sleep_minutes=60,
         )
 
-    idx = state.current_index % len(schedule)
-    item = schedule[idx]
+    if frame.schedule_mode == "calendar":
+        item, sleep_minutes, idx = _calendar_item_for_now(frame, schedule)
+    else:
+        idx = state.current_index % len(schedule)
+        item = schedule[idx]
+        sleep_minutes = max(1, item.sleep_minutes)
     target = target_for(frame.display_type)
 
     response = FramePollResponse(
         type="text",
         text=TextPayload(title="...", body="..."),
-        sleep_minutes=max(1, item.sleep_minutes),
+        sleep_minutes=sleep_minutes,
     )
 
     if item.item_type == "inbox":
@@ -272,7 +304,10 @@ async def resolve_next_for_frame(
             response.plugin = plugin_payload
             response.text = None
 
-    state.current_index = (idx + 1) % len(schedule)
+    if frame.schedule_mode == "calendar":
+        state.current_index = schedule.index(item)
+    else:
+        state.current_index = (idx + 1) % len(schedule)
     state.last_advance_at = datetime.utcnow()
 
     await _prune_cache(session)

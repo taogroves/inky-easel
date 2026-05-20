@@ -113,12 +113,13 @@ export async function buildBundleAction(
 
 export async function saveScheduleAction(
   frameId: string,
+  scheduleMode: "relative" | "calendar",
   items: Array<Omit<ScheduleItem, "id" | "position">>,
 ): Promise<ActionResult<ScheduleItem[]>> {
   try {
     const saved = await api<ScheduleItem[]>(`/api/frames/${frameId}/schedule`, {
       method: "PUT",
-      body: JSON.stringify({ items }),
+      body: JSON.stringify({ schedule_mode: scheduleMode, items }),
     });
     revalidatePath(`/dashboard/frames/${frameId}/schedule`);
     return { ok: true, data: saved };

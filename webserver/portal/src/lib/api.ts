@@ -72,6 +72,7 @@ export type Frame = {
   longitude: number | null;
   timezone: string | null;
   display_type: string;
+  schedule_mode: "relative" | "calendar";
   inbox_mode: "open" | "private" | "closed";
   inbox_password: string | null;
   inbox_repeat_enabled: boolean;
@@ -94,6 +95,7 @@ export type ScheduleItem = {
   item_ref: string | null;
   config: Record<string, unknown> | null;
   sleep_minutes: number;
+  start_minute: number | null;
 };
 
 export type Plugin = {

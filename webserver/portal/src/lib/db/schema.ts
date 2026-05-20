@@ -101,6 +101,7 @@ export const frame = mysqlTable(
     longitude: double("longitude"),
     timezone: varchar("timezone", { length: 64 }),
     displayType: varchar("display_type", { length: 40 }).default("inky_frame_7_spectra").notNull(),
+    scheduleMode: varchar("schedule_mode", { length: 16 }).default("relative").notNull(),
     inboxMode: varchar("inbox_mode", { length: 16 }).default("open").notNull(),
     inboxPassword: varchar("inbox_password", { length: 120 }),
     inboxRepeatEnabled: boolean("inbox_repeat_enabled").default(false).notNull(),
@@ -136,6 +137,7 @@ export const scheduleItem = mysqlTable(
     itemRef: varchar("item_ref", { length: 255 }),
     config: json("config"),
     sleepMinutes: int("sleep_minutes").default(60).notNull(),
+    startMinute: int("start_minute"),
   },
   (t) => ({
     uniqPos: uniqueIndex("uq_schedule_position").on(t.frameId, t.position),

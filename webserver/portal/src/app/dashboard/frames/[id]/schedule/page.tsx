@@ -20,10 +20,10 @@ export default async function SchedulePage(props: { params: Promise<{ id: string
         </Link>
         <h1 className="mt-3 font-display text-3xl">{frame.display_name} - schedule</h1>
         <p className="mt-2 max-w-prose text-sm text-ink-soft">
-          Items run top to bottom and loop forever. Each item sleeps for the listed number
-          of minutes after being shown.
+          Use a simple top-to-bottom loop, or switch to a 24-hour day calendar where
+          each item appears at a local time.
         </p>
-        <ScheduleEditor frameId={frame.id} initial={schedule} plugins={plugins} />
+        <ScheduleEditor frameId={frame.id} initialMode={frame.schedule_mode} initial={schedule} plugins={plugins} />
       </div>
     );
   } catch (e) {

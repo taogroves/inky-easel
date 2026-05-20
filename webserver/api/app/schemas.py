@@ -74,6 +74,7 @@ class FrameUpdate(ApiModel):
     longitude: Optional[float] = None
     timezone: Optional[str] = None
     display_type: Optional[str] = None
+    schedule_mode: Optional[Literal["relative", "calendar"]] = None
     inbox_mode: Optional[Literal["open", "private", "closed"]] = None
     inbox_password: Optional[str] = Field(default=None, max_length=120)
     inbox_repeat_enabled: Optional[bool] = None
@@ -88,6 +89,7 @@ class FrameOut(ApiModel):
     longitude: Optional[float]
     timezone: Optional[str]
     display_type: str
+    schedule_mode: str
     inbox_mode: str
     inbox_password: Optional[str]
     inbox_repeat_enabled: bool
@@ -113,6 +115,7 @@ class ScheduleItemIn(ApiModel):
     item_ref: Optional[str] = None
     config: Optional[dict[str, Any]] = None
     sleep_minutes: int = Field(60, ge=1, le=1440)
+    start_minute: Optional[int] = Field(default=None, ge=0, le=1439)
 
 
 class ScheduleItemOut(ScheduleItemIn):
@@ -124,6 +127,7 @@ class ScheduleItemOut(ScheduleItemIn):
 
 
 class ScheduleReplace(ApiModel):
+    schedule_mode: Literal["relative", "calendar"] = "relative"
     items: list[ScheduleItemIn]
 
 
