@@ -382,6 +382,33 @@ def _draw_precip_graph(
         draw.rectangle((bx, by, bx + bar_w, plot_y + plot_h), fill=color)
 
 
+def _draw_moon_phase(
+    draw: ImageDraw.ImageDraw,
+    cx: int,
+    cy: int,
+    size: int,
+    illumination: float | None,
+    *,
+    waxing: bool = True,
+) -> None:
+    r = max(8, size // 2)
+    bbox = (cx - r, cy - r, cx + r, cy + r)
+    shadow = (100, 105, 120)
+    lit = (245, 247, 255)
+    draw.ellipse(bbox, fill=(175, 180, 195), outline=shadow, width=2)
+    pct = 50.0 if illumination is None else illumination
+    if pct >= 99:
+        draw.ellipse(bbox, fill=lit, outline=shadow, width=2)
+        return
+    if pct <= 1:
+        return
+    span = int(min(360, pct * 3.6))
+    if waxing:
+        draw.pieslice(bbox, 270 - span // 2, 270 + span // 2, fill=lit)
+    else:
+        draw.pieslice(bbox, 90 - span // 2, 90 + span // 2, fill=lit)
+
+
 def render_weather(target: RenderTarget, payload: dict) -> bytes:
     current = payload.get("current", {})
     hourly = payload.get("hourly", [])
@@ -395,10 +422,14 @@ def render_weather(target: RenderTarget, payload: dict) -> bytes:
     draw = ImageDraw.Draw(img)
 
     scale = target.height / 480
-    hero_h = int(target.height * 0.42)
-    graph_h = int(target.height * 0.22)
-    footer_h = target.height - hero_h - graph_h * 2 - int(12 * scale)
     margin = int(16 * scale)
+    footer_h = int(56 * scale)
+    hero_h = int(target.height * 0.34)
+    graph_gap = int(6 * scale)
+    graph_rows = 2
+    graph_cols = 2
+    graph_h = (target.height - hero_h - footer_h - graph_gap * (graph_rows + 1)) // graph_rows
+    graph_w = (target.width - margin * (graph_cols + 1)) // graph_cols
 
     draw.rectangle((0, 0, target.width, int(10 * scale)), fill=accent)
     icon_size = int(min(hero_h * 0.7, target.width * 0.22))
@@ -422,47 +453,58 @@ def render_weather(target: RenderTarget, payload: dict) -> bytes:
         font=meta_font,
     )
 
-    graph_y = hero_h + int(6 * scale)
-    graph_w = (target.width - margin * 3) // 2
+    moon = payload.get("moon") or {}
+    moon_size = int(min(hero_h * 0.45, 72 * scale))
+    moon_cx = target.width - margin - moon_size // 2
+    moon_cy = int(hero_h * 0.42)
+    _draw_moon_phase(
+        draw,
+        moon_cx,
+        moon_cy,
+        moon_size,
+        moon.get("illumination"),
+        waxing=moon.get("waxing", True),
+    )
+    moon_font = _load_font(int(14 * scale))
+    moon_label = moon.get("phase") or "Moon"
+    illum = moon.get("illumination")
+    moon_detail = f"{int(round(illum))}% lit" if illum is not None else ""
+    draw.text((moon_cx - moon_size, moon_cy + moon_size // 2 + 4), moon_label,
+              fill=INKY_PALETTE["BLACK"], font=moon_font)
+    if moon_detail:
+        draw.text((moon_cx - moon_size, moon_cy + moon_size // 2 + int(20 * scale)), moon_detail,
+                  fill=secondary, font=_load_font(int(12 * scale)))
+
+    graph_y = hero_h + graph_gap
     temps = _series_values(hourly, "temperature")
     precips = _series_values(hourly, "precip_prob")
-    temp_fmt = lambda v: f"{int(round(v))}{unit_sym[-1:]}"
-    _draw_series_graph(
-        draw,
-        margin,
-        graph_y,
-        graph_w,
-        graph_h,
-        temps,
-        color=accent,
-        fill=tint,
-        label="Temp",
-        value_fmt=temp_fmt,
-    )
-    _draw_precip_graph(
-        draw,
-        margin * 2 + graph_w,
-        graph_y,
-        graph_w,
-        graph_h,
-        precips,
-        color=secondary,
-    )
-
-    wind_graph_y = graph_y + graph_h + int(6 * scale)
     winds = _series_values(hourly, "wind_speed")
+    uv_values = _series_values(hourly, "uv_index")
     wind_unit = payload.get("wind_unit", "km/h")
-    _draw_series_graph(
-        draw,
-        margin,
-        wind_graph_y,
-        target.width - margin * 2,
-        graph_h,
-        winds,
-        color=accent,
-        label=f"Wind ({wind_unit})",
-        value_fmt=lambda v: str(int(round(v))),
-    )
+    temp_fmt = lambda v: f"{int(round(v))}{unit_sym[-1:]}"
+
+    graphs = [
+        (temps, {"color": accent, "fill": tint, "label": "Temp", "value_fmt": temp_fmt, "kind": "line"}),
+        (precips, {"color": secondary, "label": "Rain %", "kind": "precip"}),
+        (winds, {"color": accent, "label": f"Wind ({wind_unit})", "value_fmt": lambda v: str(int(round(v))), "kind": "line"}),
+        (uv_values, {"color": INKY_PALETTE["ORANGE"], "label": "UV index", "value_fmt": lambda v: f"{v:.0f}", "kind": "line", "y_min": 0, "y_max": 12}),
+    ]
+    for idx, (values, opts) in enumerate(graphs):
+        row, col = divmod(idx, graph_cols)
+        gx = margin + col * (graph_w + margin)
+        gy = graph_y + row * (graph_h + graph_gap)
+        if opts["kind"] == "precip":
+            _draw_precip_graph(draw, gx, gy, graph_w, graph_h, values, color=opts["color"])
+        else:
+            _draw_series_graph(
+                draw, gx, gy, graph_w, graph_h, values,
+                color=opts["color"],
+                fill=opts.get("fill"),
+                y_min=opts.get("y_min"),
+                y_max=opts.get("y_max"),
+                label=opts["label"],
+                value_fmt=opts["value_fmt"],
+            )
 
     footer_y = target.height - footer_h
     draw.rectangle((0, footer_y, target.width, target.height), fill=INKY_PALETTE["WHITE"])
@@ -472,10 +514,14 @@ def render_weather(target: RenderTarget, payload: dict) -> bytes:
     wind_now = int(round(current.get("wind_speed", 0)))
     sunrise = payload.get("sunrise") or "--:--"
     sunset = payload.get("sunset") or "--:--"
+    moon_footer = moon_label
+    if illum is not None:
+        moon_footer = f"{moon_label} ({int(round(illum))}%)"
     cols = [
         ("Sunrise", sunrise),
         ("Sunset", sunset),
-        (f"Wind now", f"{wind_now} {wind_unit}"),
+        ("Moon", moon_footer),
+        ("Wind now", f"{wind_now} {wind_unit}"),
     ]
     col_w = (target.width - margin * 2) // len(cols)
     for i, (label, value) in enumerate(cols):
