@@ -2,16 +2,18 @@
 
 Boot sequence:
   1. Mount SD card, sync RTC (NTP when online, else PCF85063A), init the display.
-  2. Read battery. If critical (<10%) draw the empty-battery screen and
-     deep-sleep for an hour without contacting the server.
+  2. Read battery. If critical (<10%) and not charging, draw the empty-battery
+     screen and deep-sleep for an hour without contacting the server.
   3. Connect to Wi-Fi (credentials from secrets.py).
   4. POST /api/frame/poll to the configured server with battery telemetry.
   5. Render whatever the server returns (image / text / plugin).
-  6. Overlay the low-battery icon if percent < 20.
-  7. Deep-sleep for the duration the server requested.
+  6. Overlay the battery icon if percent < 20 or charging.
+  7. Deep-sleep for the duration the server requested, or stay awake while
+     charging and only refresh the battery overlay when needed.
 """
 
 import gc
+import json
 import os
 import time
 
@@ -24,6 +26,11 @@ import inky_helper as ih
 import battery
 import display as scene
 import frame_client
+
+
+CHARGE_STATE_FILE = "inky_easel_charge.json"
+CHARGING_DELTA_V = 0.005
+CHARGING_CHECK_SECONDS = 60
 
 
 def _import_display():
@@ -73,10 +80,12 @@ def _deep_sleep(minutes, voltage=None):
     ih.sleep(minutes, voltage=voltage)
 
 
-def _show_error_then_next(graphics, width, height, message):
-    scene.draw_error_screen(graphics, width, height, message)
-    graphics.update()
-    _deep_sleep(1)
+def _update_display(graphics):
+    try:
+        inky_frame.led_busy.on()
+        graphics.update()
+    finally:
+        inky_frame.led_busy.off()
 
 
 def _connect_wifi():
@@ -126,6 +135,187 @@ def _render(graphics, width, height, response):
         return
 
 
+def _render_with_battery(graphics, width, height, response, percent, charging):
+    _render(graphics, width, height, response)
+    if charging or battery.is_low(percent):
+        scene.draw_battery_overlay(graphics, width, percent, charging=charging)
+
+
+def _scheduled_refresh(graphics, width, height, server_url, frame_id,
+                       frame_secret, default_sleep_minutes, voltage, percent,
+                       wakeup, charging):
+    if not _connect_wifi():
+        _show_error(graphics, width, height, "Wi-Fi unavailable")
+        return None, 1, False
+
+    try:
+        ih.network_led(100)
+        response = frame_client.poll(
+            server_url, frame_id, frame_secret, voltage, percent, wakeup
+        )
+    except frame_client.PollError as e:
+        ih.stop_network_led()
+        print("Poll failed:", e)
+        if "Bad JSON" in str(e):
+            _show_error(graphics, width, height, "Bad server response")
+        else:
+            _show_error(graphics, width, height, "Server unreachable")
+        return None, 1, False
+    finally:
+        ih.stop_network_led()
+
+    try:
+        _render_with_battery(graphics, width, height, response, percent, charging)
+    except Exception as e:
+        print("Render failed:", e)
+        _show_error(graphics, width, height, "Render failed")
+        return None, 1, False
+
+    _update_display(graphics)
+    gc.collect()
+    sleep_minutes = int(response.get("sleep_minutes") or default_sleep_minutes)
+    print("Server requested sleep_minutes =", sleep_minutes)
+    return response, sleep_minutes, True
+
+
+def _show_error(graphics, width, height, message):
+    scene.draw_error_screen(graphics, width, height, message)
+    _update_display(graphics)
+
+
+def _charge_state_path(sd_ok):
+    if sd_ok:
+        return "/sd/" + CHARGE_STATE_FILE
+    return "/" + CHARGE_STATE_FILE
+
+
+def _load_charge_state(path):
+    try:
+        with open(path, "r") as f:
+            data = json.loads(f.read())
+        if type(data) is dict:
+            return data
+    except OSError:
+        pass
+    except Exception as e:
+        print("Charge state load failed:", e)
+    return {}
+
+
+def _save_charge_state(path, voltage, percent, charging):
+    data = {
+        "last_voltage": round(voltage, 4),
+        "last_percent": int(percent),
+        "charging": bool(charging),
+    }
+    try:
+        with open(path, "w") as f:
+            f.write(json.dumps(data))
+            f.flush()
+    except Exception as e:
+        print("Charge state save failed:", e)
+
+
+def _number(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _voltage_went_up(voltage, state):
+    previous = _number(state.get("last_voltage"))
+    return previous is not None and voltage > previous + CHARGING_DELTA_V
+
+
+def _charge_bucket(percent):
+    percent = max(0, min(100, int(percent)))
+    return percent // 5
+
+
+def _minutes_until(timestamp):
+    remaining = int(timestamp - time.time())
+    if remaining <= 0:
+        return 1
+    return max(1, (remaining + 59) // 60)
+
+
+def _flash_charge_check_led():
+    inky_frame.button_e.led_on()
+    time.sleep_ms(120)
+    inky_frame.button_e.led_off()
+
+
+def _disable_wifi_for_charge_monitor():
+    ih.stop_network_led()
+    try:
+        import network
+
+        network.WLAN(network.STA_IF).active(False)
+    except Exception:
+        pass
+
+
+def _monitor_charging(graphics, width, height, response, sleep_minutes,
+                      state_path, voltage, percent, server_url, frame_id,
+                      frame_secret, default_sleep_minutes):
+    print("Charging detected; checking battery every minute")
+    _disable_wifi_for_charge_monitor()
+    inky_frame.vsys.on()
+
+    last_voltage = voltage
+    last_bucket = _charge_bucket(percent)
+    next_refresh_at = time.time() + max(1, int(sleep_minutes)) * 60
+    _save_charge_state(state_path, voltage, percent, True)
+
+    while True:
+        time.sleep(CHARGING_CHECK_SECONDS)
+        _flash_charge_check_led()
+
+        voltage, percent = battery.read()
+        now = time.time()
+        print("Charging check {:.2f}V ({}%)".format(voltage, percent))
+
+        if voltage < last_voltage - CHARGING_DELTA_V:
+            print("Battery voltage dropped; ending charge monitor")
+            _save_charge_state(state_path, voltage, percent, False)
+            if now >= next_refresh_at:
+                response, sleep_minutes, _ = _scheduled_refresh(
+                    graphics, width, height, server_url, frame_id, frame_secret,
+                    default_sleep_minutes, voltage, percent, "rtc", False
+                )
+                _save_charge_state(state_path, voltage, percent, False)
+                _deep_sleep(sleep_minutes, voltage=voltage)
+            else:
+                if response is not None:
+                    _render_with_battery(graphics, width, height, response, percent, False)
+                    _update_display(graphics)
+                    gc.collect()
+                _deep_sleep(_minutes_until(next_refresh_at), voltage=voltage)
+            return
+
+        if now >= next_refresh_at:
+            response, sleep_minutes, _ = _scheduled_refresh(
+                graphics, width, height, server_url, frame_id, frame_secret,
+                default_sleep_minutes, voltage, percent, "rtc", True
+            )
+            _disable_wifi_for_charge_monitor()
+            next_refresh_at = time.time() + max(1, int(sleep_minutes)) * 60
+            last_bucket = _charge_bucket(percent)
+        else:
+            bucket = _charge_bucket(percent)
+            if bucket > last_bucket:
+                print("Charge reached {}% bucket".format(bucket * 5))
+                if response is not None:
+                    scene.draw_battery_overlay(graphics, width, percent, charging=True)
+                    _update_display(graphics)
+                    gc.collect()
+                last_bucket = bucket
+
+        last_voltage = voltage
+        _save_charge_state(state_path, voltage, percent, True)
+
+
 def main():
     time.sleep(0.3)
     ih.all_leds_off()
@@ -148,53 +338,39 @@ def main():
     width, height = graphics.get_bounds()
     graphics.set_font("bitmap8")
 
-    voltage, percent = battery.read()
-    print("Battery {:.2f}V ({}%)".format(voltage, percent))
+    state_path = _charge_state_path(sd_ok)
+    charge_state = _load_charge_state(state_path)
 
-    if battery.is_critical(percent):
+    voltage, percent = battery.read()
+    charging = _voltage_went_up(voltage, charge_state)
+    print("Battery {:.2f}V ({}%) charging={}".format(voltage, percent, charging))
+    _save_charge_state(state_path, voltage, percent, charging)
+
+    if battery.is_critical(percent) and not charging:
+        _save_charge_state(state_path, voltage, percent, False)
         scene.draw_critical_battery_screen(graphics, width, height)
         _deep_sleep(60, voltage=voltage)
         return
 
     wakeup = _wakeup_reason()
 
-    if not _connect_wifi():
-        _show_error_then_next(graphics, width, height, "Wi-Fi unavailable")
+    response, sleep_minutes, ok = _scheduled_refresh(
+        graphics, width, height, SERVER_URL, FRAME_ID, FRAME_SECRET,
+        DEFAULT_SLEEP_MINUTES, voltage, percent, wakeup, charging
+    )
+
+    if charging:
+        _monitor_charging(
+            graphics, width, height, response, sleep_minutes,
+            state_path, voltage, percent, SERVER_URL, FRAME_ID, FRAME_SECRET,
+            DEFAULT_SLEEP_MINUTES
+        )
         return
 
-    try:
-        ih.network_led(100)
-        response = frame_client.poll(SERVER_URL, FRAME_ID, FRAME_SECRET, voltage, percent, wakeup)
-    except frame_client.PollError as e:
-        ih.stop_network_led()
-        print("Poll failed:", e)
-        if "Bad JSON" in str(e):
-            _show_error_then_next(graphics, width, height, "Bad server response")
-        else:
-            _show_error_then_next(graphics, width, height, "Server unreachable")
+    _save_charge_state(state_path, voltage, percent, False)
+    if not ok:
+        _deep_sleep(1, voltage=voltage)
         return
-    finally:
-        ih.stop_network_led()
-
-    try:
-        _render(graphics, width, height, response)
-    except Exception as e:
-        print("Render failed:", e)
-        _show_error_then_next(graphics, width, height, "Render failed")
-        return
-
-    if battery.is_low(percent):
-        scene.draw_low_battery_overlay(graphics, width, percent)
-
-    try:
-        inky_frame.led_busy.on()
-        graphics.update()
-    finally:
-        inky_frame.led_busy.off()
-    gc.collect()
-
-    sleep_minutes = int(response.get("sleep_minutes") or DEFAULT_SLEEP_MINUTES)
-    print("Server requested sleep_minutes =", sleep_minutes)
     _deep_sleep(sleep_minutes, voltage=voltage)
 
 

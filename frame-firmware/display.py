@@ -18,9 +18,9 @@ def clear(graphics, color=WHITE):
     graphics.clear()
 
 
-def draw_low_battery_overlay(graphics, width, percent):
-    """Compact battery icon in top-right with the level filled in red."""
-    body_w = 70
+def draw_battery_overlay(graphics, width, percent, charging=False):
+    """Compact battery icon in top-right with percent and charging state."""
+    body_w = 82
     body_h = 28
     tip_w = 6
     tip_h = 12
@@ -42,8 +42,32 @@ def draw_low_battery_overlay(graphics, width, percent):
     graphics.rectangle(x + 4, y + 4, fill_w, body_h - 8)
 
     graphics.set_pen(BLACK)
+    label = "{}%".format(percent)
+    label_scale = 2
+    if charging and len(label) > 3:
+        label_scale = 1
     graphics.set_font("bitmap8")
-    graphics.text("{}%".format(percent), x - 60, y + 6, 60, 2)
+    label_w = graphics.measure_text(label, label_scale)
+    if charging:
+        _draw_lightning_bolt(graphics, x + 8, y + 5)
+        text_x = x + 28 + max(0, (body_w - 30 - label_w) // 2)
+        text_y = y + 6 if label_scale == 2 else y + 10
+    else:
+        text_x = x + max(0, (body_w - label_w) // 2)
+        text_y = y + 6
+    graphics.text(label, text_x, text_y, body_w - 4, label_scale)
+
+
+def draw_low_battery_overlay(graphics, width, percent):
+    draw_battery_overlay(graphics, width, percent, charging=False)
+
+
+def _draw_lightning_bolt(graphics, x, y):
+    # Drawn as chunky rectangles so it works on PicoGraphics without polygons.
+    graphics.rectangle(x + 7, y, 5, 9)
+    graphics.rectangle(x + 4, y + 7, 7, 5)
+    graphics.rectangle(x + 1, y + 11, 6, 4)
+    graphics.rectangle(x + 5, y + 12, 5, 9)
 
 
 def draw_critical_battery_screen(graphics, width, height):
