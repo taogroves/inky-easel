@@ -25,7 +25,7 @@ export default function InboxSettingsForm({ frame }: { frame: FrameWithSecret })
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
           <h2 className="font-display text-xl">Inbox settings</h2>
-          <p className="text-sm text-ink-soft">Control who can send here and how messages repeat on the frame.</p>
+          <p className="text-sm text-ink-soft">Control who can reach your inbox and how it behaves.</p>
         </div>
         <button type="submit" className="btn-primary" disabled={pending}>
           {pending ? "Saving..." : "Save inbox settings"}
