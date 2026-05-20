@@ -1,0 +1,20 @@
+# Local development only — copy to docker-compose.override.yml (gitignored).
+# Docker Compose merges this file automatically and publishes ports on localhost.
+#
+#   cp docker-compose.override.example.yml docker-compose.override.yml
+#
+# Do not deploy this file to Coolify. Production uses Coolify's proxy (Traefik)
+# instead of host port bindings.
+
+services:
+  db:
+    ports:
+      - "${MARIADB_PORT:-3306}:3306"
+
+  api:
+    ports:
+      - "${API_PORT:-8000}:8000"
+
+  portal:
+    ports:
+      - "${PORTAL_PORT:-3000}:3000"

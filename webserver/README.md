@@ -17,9 +17,14 @@ startup.
 ```bash
 cd webserver
 cp .env.example .env            # then edit the secrets
+cp docker-compose.override.example.yml docker-compose.override.yml
 docker compose up --build
 # wait for "Uvicorn running" and "Ready in..." messages
 ```
+
+The override file publishes `localhost` ports for MariaDB, the API, and the
+portal. Production/Coolify deployments omit it so the database is not exposed on
+the host (see `coolify.md`).
 
 Then visit http://localhost:3000 to create the first user.
 
@@ -85,14 +90,12 @@ code, or draws the inline text.
 
 ## Coolify deployment
 
-* Point Coolify at this folder's `docker-compose.yml`.
-* Set every variable from `.env.example` in the Coolify UI.
-* Map `easel.example.com` to the `portal` service and (optionally) a separate
-  subdomain to the `api` service (or expose `api` via the portal's reverse
-  proxy if you'd rather not).
-* Make sure `PUBLIC_BASE_URL` and `BETTER_AUTH_URL` resolve to the right
-  outside URLs. Production setup bundles default to `PUBLIC_BASE_URL`; local
-  development can override the frame URL per bundle from the setup wizard.
+See **[coolify.md](./coolify.md)** for a full step-by-step guide (build pack
+settings, environment variables, domains, TLS, and troubleshooting).
+
+Summary: base directory `webserver`, Docker Compose build pack, assign
+`https://your-portal:3000` to `portal` and `https://your-api:8000` to `api`, leave
+`db` private, set `PUBLIC_BASE_URL` to the API URL.
 
 ## Manual smoke tests
 

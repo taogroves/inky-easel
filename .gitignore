@@ -68,6 +68,9 @@ Thumbs.db
 *.swo
 *~
 
+# Local Docker Compose port overrides (see webserver/docker-compose.override.example.yml)
+webserver/docker-compose.override.yml
+
 # ----- Infra local state -----
 .terraform/
 *.tfstate
