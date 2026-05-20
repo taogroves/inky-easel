@@ -1,7 +1,7 @@
 """Inky Easel app entry point loaded from the SD card.
 
 Boot sequence:
-  1. Mount SD card, sync RTC, init the display.
+  1. Mount SD card, sync RTC (NTP when online, else PCF85063A), init the display.
   2. Read battery. If critical (<10%) draw the empty-battery screen and
      deep-sleep for an hour without contacting the server.
   3. Connect to Wi-Fi (credentials from secrets.py).
@@ -67,10 +67,10 @@ def _wakeup_reason():
     return "power"
 
 
-def _deep_sleep(minutes):
+def _deep_sleep(minutes, voltage=None):
     minutes = max(1, int(minutes))
     print("Sleeping for", minutes, "minutes")
-    ih.sleep(minutes)
+    ih.sleep(minutes, voltage=voltage)
 
 
 def _show_error_then_next(graphics, width, height, message):
@@ -88,7 +88,10 @@ def _connect_wifi():
     ih.warn_led(False)
     ih.network_connect(WIFI_SSID, WIFI_PASSWORD)
     import network
-    return network.WLAN(network.STA_IF).isconnected()
+    connected = network.WLAN(network.STA_IF).isconnected()
+    if connected:
+        ih.sync_rtc_time()
+    return connected
 
 
 def _render(graphics, width, height, response):
@@ -127,10 +130,7 @@ def main():
     time.sleep(0.3)
     ih.all_leds_off()
 
-    try:
-        inky_frame.pcf_to_pico_rtc()
-    except Exception as e:
-        print("RTC sync failed:", e)
+    ih.sync_rtc_time()
 
     sd_ok = _mount_sd()
     if not sd_ok:
@@ -141,7 +141,7 @@ def main():
         from frame_config import DEFAULT_SLEEP_MINUTES, FRAME_ID, FRAME_SECRET, SERVER_URL
     except ImportError:
         print("Missing frame_config.py - cannot continue")
-        _deep_sleep(15)
+        _deep_sleep(15, voltage=None)
         return
 
     graphics = _import_display()
@@ -153,7 +153,7 @@ def main():
 
     if battery.is_critical(percent):
         scene.draw_critical_battery_screen(graphics, width, height)
-        _deep_sleep(60)
+        _deep_sleep(60, voltage=voltage)
         return
 
     wakeup = _wakeup_reason()
@@ -195,7 +195,7 @@ def main():
 
     sleep_minutes = int(response.get("sleep_minutes") or DEFAULT_SLEEP_MINUTES)
     print("Server requested sleep_minutes =", sleep_minutes)
-    _deep_sleep(sleep_minutes)
+    _deep_sleep(sleep_minutes, voltage=voltage)
 
 
 if __name__ == "__main__":

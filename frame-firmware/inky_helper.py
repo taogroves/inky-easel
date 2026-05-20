@@ -7,18 +7,6 @@ import inky_frame
 import machine
 import network
 from machine import PWM, Pin, Timer
-from pcf85063a import PCF85063A
-from pimoroni_i2c import PimoroniI2C
-
-# Pin setup for VSYS_HOLD needed to sleep and wake.
-HOLD_VSYS_EN_PIN = 2
-hold_vsys_en_pin = Pin(HOLD_VSYS_EN_PIN, Pin.OUT)
-
-# intialise the pcf85063a real time clock chip
-I2C_SDA_PIN = 4
-I2C_SCL_PIN = 5
-i2c = PimoroniI2C(I2C_SDA_PIN, I2C_SCL_PIN, 100000)
-rtc = PCF85063A(i2c)
 
 led_warn = Pin(6, Pin.OUT)
 
@@ -76,26 +64,103 @@ def all_leds_off():
         pass
 
 
-def sleep(minutes):
+def sync_rtc_time(ssid=None, password=None):
+    """Set Pico + PCF85063A from NTP when Wi-Fi is up; else PCF -> Pico."""
+    wlan = network.WLAN(network.STA_IF)
+
+    if ssid is not None and password is not None and not wlan.isconnected():
+        network_connect(ssid, password)
+        wlan = network.WLAN(network.STA_IF)
+
+    if wlan.active() and wlan.isconnected():
+        try:
+            inky_frame.set_time()
+            print("RTC set from NTP")
+            return "ntp"
+        except Exception as e:
+            print("NTP set_time failed:", e)
+
+    try:
+        inky_frame.pcf_to_pico_rtc()
+        print("RTC synced from PCF85063A")
+        return "pcf"
+    except Exception as e:
+        print("RTC sync failed:", e)
+        return None
+
+
+USB_VOLTAGE_THRESHOLD = 4.55
+
+
+def is_usb_power(voltage):
+    """USB / charging usually reads well above a LiPo cell alone."""
+    return voltage >= USB_VOLTAGE_THRESHOLD
+
+
+def _prepare_rtc_alarm(minutes):
+    rtc = inky_frame.rtc
+    year, month, day, hour, minute, second, dow = rtc.datetime()
+    if second >= 55:
+        minute += 1
+    minutes = min(max(1, int(minutes)), 40320)
+    sec_since_epoch = time.mktime((year, month, day, hour, minute, second, dow, 0))
+    sec_since_epoch += minutes * 60
+    alarm = time.localtime(sec_since_epoch)
+    rtc.clear_alarm_flag()
+    rtc.set_alarm(0, alarm[4], alarm[3], alarm[2])
+    rtc.enable_alarm_interrupt(True)
+    return alarm
+
+
+def sleep_usb(minutes):
+    """USB-safe wait: keep VSYS held, poll RTC alarm, then reset (no turn_off)."""
+    minutes = max(1, int(minutes))
+    print("USB power: holding VSYS, polling RTC alarm for", minutes, "min")
+    inky_frame.vsys.on()
+    alarm = _prepare_rtc_alarm(minutes)
+    print("RTC alarm at {:02d}:{:02d} day {}".format(alarm[3], alarm[4], alarm[2]))
+
+    wlan = network.WLAN(network.STA_IF)
+    try:
+        wlan.active(False)
+    except Exception:
+        pass
+
+    end = time.time() + minutes * 60
+    while time.time() < end:
+        if inky_frame.rtc.read_alarm_flag():
+            print("RTC alarm fired")
+            inky_frame.rtc.clear_alarm_flag()
+            machine.reset()
+        time.sleep(1)
+
+    print("Sleep interval complete")
+    machine.reset()
+
+
+def sleep(minutes, voltage=None):
+    """Deep-sleep on battery; USB-safe simulated sleep when externally powered."""
     minutes = max(1, int(minutes))
     all_leds_off()
 
-    try:
-        # Time to have a little nap until the next update. The 1/60Hz tick
-        # makes the timer value minutes, not seconds.
-        rtc.clear_timer_flag()
-        rtc.set_timer(minutes, ttp=rtc.TIMER_TICK_1_OVER_60HZ)
-        rtc.enable_timer_interrupt(True)
+    if voltage is None:
+        try:
+            import battery
 
-        # Set the HOLD VSYS pin to an input. This allows the device to power
-        # down on battery and wake from the RTC interrupt.
-        hold_vsys_en_pin.init(Pin.IN)
+            voltage, _ = battery.read()
+        except Exception:
+            voltage = 0.0
+
+    if is_usb_power(voltage):
+        sleep_usb(minutes)
+        return
+
+    try:
+        inky_frame.sleep_for(minutes)
     except Exception as e:
         print("RTC sleep setup failed:", e)
-
-    # Regular time.sleep for those powering from USB
-    time.sleep(60 * minutes)
-    machine.reset()
+        time.sleep(60 * minutes)
+        machine.reset()
 
 
 # Turns off the button LEDs

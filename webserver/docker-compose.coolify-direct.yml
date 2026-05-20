@@ -1,0 +1,69 @@
+services:
+  db:
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-inky_easel}
+      MARIADB_USER: ${MARIADB_USER:-inky}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD:?Set MARIADB_PASSWORD in Coolify}
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?Set MARIADB_ROOT_PASSWORD in Coolify}
+    volumes:
+      - inky-db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ..
+      dockerfile: webserver/api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    labels:
+      - traefik.enable=false
+    environment:
+      APP_ENV: production
+      DATABASE_URL: ${API_DATABASE_URL:?Set API_DATABASE_URL in Coolify}
+      SERVICE_SECRET: ${SERVICE_SECRET:?Set SERVICE_SECRET in Coolify}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?Set PUBLIC_BASE_URL in Coolify}
+      CORS_ORIGINS: ${CORS_ORIGINS:?Set CORS_ORIGINS in Coolify}
+      CONTENT_CACHE_MINUTES: ${CONTENT_CACHE_MINUTES:-15}
+      FRAME_FIRMWARE_DIR: /app/frame-firmware
+    ports:
+      - "${API_BIND_ADDRESS:-127.0.0.1}:${API_HOST_PORT:-18080}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  portal:
+    build:
+      context: ./portal
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    labels:
+      - traefik.enable=false
+    environment:
+      DATABASE_URL: ${PORTAL_DATABASE_URL:?Set PORTAL_DATABASE_URL in Coolify}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:?Set BETTER_AUTH_URL in Coolify}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in Coolify}
+      BETTER_AUTH_TRUSTED_ORIGINS: ${BETTER_AUTH_TRUSTED_ORIGINS:?Set BETTER_AUTH_TRUSTED_ORIGINS in Coolify}
+      NEXT_PUBLIC_BETTER_AUTH_URL: ${BETTER_AUTH_URL:?Set BETTER_AUTH_URL in Coolify}
+      API_BASE_URL: http://api:8000
+      SERVICE_SECRET: ${SERVICE_SECRET:?Set SERVICE_SECRET in Coolify}
+      NOMINATIM_USER_AGENT: ${NOMINATIM_USER_AGENT:?Set NOMINATIM_USER_AGENT in Coolify}
+    ports:
+      - "${PORTAL_BIND_ADDRESS:-127.0.0.1}:${PORTAL_HOST_PORT:-13000}:3000"
+
+volumes:
+  inky-db:
