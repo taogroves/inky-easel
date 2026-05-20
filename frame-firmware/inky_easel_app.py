@@ -4,7 +4,7 @@ Boot sequence:
   1. Mount SD card, sync RTC (NTP when online, else PCF85063A), init the display.
   2. Read battery. If critical (<10%) and not charging, draw the empty-battery
      screen and deep-sleep for an hour without contacting the server.
-  3. Connect to Wi-Fi (credentials from secrets.py).
+  3. Connect to Wi-Fi (credentials from secrets.py); retry every 2 s if not up yet.
   4. POST /api/frame/poll to the configured server with battery telemetry.
   5. Render whatever the server returns (image / text / plugin).
   6. Overlay the battery icon if percent < 20 or charging.
@@ -88,19 +88,44 @@ def _update_display(graphics):
         inky_frame.led_busy.off()
 
 
+WIFI_CONNECT_ATTEMPTS = 3
+WIFI_CONNECT_RETRY_SEC = 2
+
+
+def _reset_wifi():
+    import network
+
+    wlan = network.WLAN(network.STA_IF)
+    try:
+        wlan.disconnect()
+    except OSError:
+        pass
+    wlan.active(False)
+    time.sleep_ms(200)
+
+
 def _connect_wifi():
     try:
         from secrets import WIFI_PASSWORD, WIFI_SSID
     except ImportError:
         print("Missing secrets.py")
         return False
-    ih.warn_led(False)
-    ih.network_connect(WIFI_SSID, WIFI_PASSWORD)
+
     import network
-    connected = network.WLAN(network.STA_IF).isconnected()
-    if connected:
-        ih.sync_rtc_time()
-    return connected
+
+    ih.warn_led(False)
+    for attempt in range(1, WIFI_CONNECT_ATTEMPTS + 1):
+        if attempt > 1:
+            _reset_wifi()
+        print("Wi-Fi attempt {}/{}".format(attempt, WIFI_CONNECT_ATTEMPTS))
+        ih.network_connect(WIFI_SSID, WIFI_PASSWORD)
+        if network.WLAN(network.STA_IF).isconnected():
+            ih.sync_rtc_time()
+            return True
+        if attempt < WIFI_CONNECT_ATTEMPTS:
+            print("Wi-Fi not ready; retry in {} s".format(WIFI_CONNECT_RETRY_SEC))
+            time.sleep(WIFI_CONNECT_RETRY_SEC)
+    return False
 
 
 def _render(graphics, width, height, response):

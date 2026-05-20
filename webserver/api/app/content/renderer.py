@@ -10,12 +10,18 @@ install fonts-dejavu-core) we use that.
 from __future__ import annotations
 
 import io
+import math
 import textwrap
 from dataclasses import dataclass
 from datetime import datetime
+from collections.abc import Callable
 from typing import Iterable
 
+import qrcode
 from PIL import Image, ImageDraw, ImageFont, ImageOps
+
+from .bitmap_font import draw_text, measure_text
+from .reddit import REDDIT_ORANGE
 
 INKY_PALETTE = {
     "BLACK": (0, 0, 0),
@@ -208,71 +214,438 @@ def render_xkcd(target: RenderTarget, image_bytes: bytes, title: str, alt: str |
     return _to_jpeg(img)
 
 
-def render_weather(target: RenderTarget, current: dict, forecast: Iterable[dict]) -> bytes:
-    img, draw = _new_canvas(target)
+def _weather_theme(code: int) -> dict:
+    gray = (130, 135, 145)
+    if code in (0, 1):
+        return {"accent": INKY_PALETTE["YELLOW"], "secondary": INKY_PALETTE["ORANGE"], "icon": "clear", "tint": (255, 248, 220)}
+    if code == 2:
+        return {"accent": INKY_PALETTE["YELLOW"], "secondary": INKY_PALETTE["BLUE"], "icon": "partly", "tint": (255, 250, 230)}
+    if code == 3:
+        return {"accent": gray, "secondary": INKY_PALETTE["BLUE"], "icon": "cloud", "tint": (235, 238, 242)}
+    if code in (45, 48):
+        return {"accent": gray, "secondary": INKY_PALETTE["BLACK"], "icon": "fog", "tint": (228, 230, 235)}
+    if code in (71, 73, 75, 77):
+        return {"accent": INKY_PALETTE["BLUE"], "secondary": INKY_PALETTE["WHITE"], "icon": "snow", "tint": (230, 240, 255)}
+    if code in (95, 96, 99):
+        return {"accent": INKY_PALETTE["ORANGE"], "secondary": INKY_PALETTE["RED"], "icon": "thunder", "tint": (245, 235, 230)}
+    if code in (51, 53, 55, 61, 63, 65, 80, 81, 82):
+        return {"accent": INKY_PALETTE["BLUE"], "secondary": INKY_PALETTE["GREEN"], "icon": "rain", "tint": (225, 238, 255)}
+    return {"accent": INKY_PALETTE["BLUE"], "secondary": INKY_PALETTE["GREEN"], "icon": "rain", "tint": (225, 238, 255)}
 
-    bar_h = 64
-    draw.rectangle((0, 0, target.width, bar_h), fill=INKY_PALETTE["BLUE"])
-    title_font = _load_font(32, bold=True)
-    draw.text((20, 14), f"Local Weather", fill=INKY_PALETTE["WHITE"], font=title_font)
 
-    big_font = _load_font(96, bold=True)
-    label_font = _load_font(20)
-    cur_temp = f"{int(round(current.get('temperature', 0)))}\N{DEGREE SIGN}"
-    draw.text((30, bar_h + 30), cur_temp, fill=INKY_PALETTE["RED"], font=big_font)
-    cond = current.get("description", "")
-    draw.text((30, bar_h + 140), cond, fill=INKY_PALETTE["BLACK"], font=label_font)
-    extras = f"Wind {int(round(current.get('wind_speed', 0)))} km/h | Humidity {int(round(current.get('humidity', 0)))}%"
-    draw.text((30, bar_h + 170), extras, fill=INKY_PALETTE["BLACK"], font=label_font)
+def _draw_weather_icon(draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, icon: str, accent, secondary) -> None:
+    s = size
+    if icon == "clear":
+        r = s // 5
+        draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=accent)
+        for angle in range(0, 360, 45):
+            rad = math.radians(angle)
+            x1 = cx + int(math.cos(rad) * r * 1.5)
+            y1 = cy + int(math.sin(rad) * r * 1.5)
+            x2 = cx + int(math.cos(rad) * r * 2.4)
+            y2 = cy + int(math.sin(rad) * r * 2.4)
+            draw.line((x1, y1, x2, y2), fill=accent, width=max(3, s // 28))
+        return
 
-    col_w = (target.width - 60) // 4
-    col_x = 30
-    col_y = target.height - 180
-    day_font = _load_font(20, bold=True)
-    temp_font = _load_font(28, bold=True)
-    for i, day in enumerate(list(forecast)[:4]):
-        x = col_x + i * col_w
-        draw.rectangle((x, col_y, x + col_w - 12, col_y + 150), outline=INKY_PALETTE["BLACK"], width=2)
-        draw.text((x + 10, col_y + 8), day.get("label", "")[:5], fill=INKY_PALETTE["BLUE"], font=day_font)
-        hi = day.get("high")
-        lo = day.get("low")
-        draw.text((x + 10, col_y + 42),
-                  f"{int(round(hi)) if hi is not None else '--'}\N{DEGREE SIGN}",
-                  fill=INKY_PALETTE["RED"], font=temp_font)
-        draw.text((x + 10, col_y + 86),
-                  f"lo {int(round(lo)) if lo is not None else '--'}\N{DEGREE SIGN}",
-                  fill=INKY_PALETTE["BLACK"], font=label_font)
+    def _cloud(ox: int, oy: int, scale: float = 1.0) -> None:
+        w = int(s * 0.55 * scale)
+        h = int(s * 0.28 * scale)
+        draw.ellipse((ox - w, oy, ox, oy + h), fill=secondary)
+        draw.ellipse((ox - w // 2, oy - h, ox + w // 2, oy + h // 2), fill=secondary)
+        draw.ellipse((ox, oy - h // 3, ox + w, oy + h), fill=secondary)
+
+    if icon == "cloud":
+        _cloud(cx, cy)
+        return
+    if icon == "partly":
+        r = s // 6
+        draw.ellipse((cx - s // 3 - r, cy - s // 5 - r, cx - s // 3 + r, cy - s // 5 + r), fill=accent)
+        _cloud(cx + s // 10, cy + s // 12, 1.05)
+        return
+    if icon == "fog":
+        for i, alpha in enumerate((0, 1, 2)):
+            y = cy - s // 10 + i * (s // 7)
+            draw.rounded_rectangle(
+                (cx - s // 2, y, cx + s // 2, y + s // 10),
+                radius=s // 20,
+                fill=accent if i == 1 else secondary,
+            )
+        return
+    if icon in {"rain", "snow", "thunder"}:
+        _cloud(cx, cy - s // 10)
+        base_y = cy + s // 5
+        if icon == "rain":
+            for dx in (-s // 5, 0, s // 5):
+                draw.line((cx + dx, base_y, cx + dx - s // 18, base_y + s // 4), fill=accent, width=max(2, s // 32))
+        elif icon == "snow":
+            for dx in (-s // 5, 0, s // 5):
+                draw.ellipse((cx + dx - 3, base_y, cx + dx + 3, base_y + 6), fill=accent)
+        else:
+            draw.polygon(
+                [
+                    (cx, base_y),
+                    (cx + s // 10, base_y + s // 5),
+                    (cx + 2, base_y + s // 5),
+                    (cx + s // 12, base_y + s // 3),
+                    (cx - s // 14, base_y + s // 6),
+                    (cx + 2, base_y + s // 6),
+                ],
+                fill=accent,
+            )
+
+
+def _series_values(points: Iterable[dict], key: str) -> list[float]:
+    out: list[float] = []
+    for point in points:
+        val = point.get(key)
+        if val is not None:
+            out.append(float(val))
+    return out
+
+
+def _draw_series_graph(
+    draw: ImageDraw.ImageDraw,
+    x: int,
+    y: int,
+    width: int,
+    height: int,
+    values: list[float],
+    *,
+    color,
+    fill: tuple[int, int, int] | None = None,
+    y_min: float | None = None,
+    y_max: float | None = None,
+    label: str,
+    value_fmt,
+) -> None:
+    if not values:
+        return
+    plot_x = x + 44
+    plot_y = y + 22
+    plot_w = width - 52
+    plot_h = height - 30
+    lo = y_min if y_min is not None else min(values)
+    hi = y_max if y_max is not None else max(values)
+    if hi == lo:
+        hi += 1
+        lo -= 1
+    draw.rectangle((x, y, x + width, y + height), outline=INKY_PALETTE["BLACK"], width=1)
+    label_font = _load_font(14, bold=True)
+    draw.text((x + 8, y + 4), label, fill=INKY_PALETTE["BLACK"], font=label_font)
+    draw.text((x + 4, plot_y), value_fmt(hi), fill=INKY_PALETTE["BLACK"], font=_load_font(12))
+    draw.text((x + 4, plot_y + plot_h - 14), value_fmt(lo), fill=INKY_PALETTE["BLACK"], font=_load_font(12))
+
+    coords: list[tuple[int, int]] = []
+    n = len(values)
+    for i, val in enumerate(values):
+        px = plot_x + int(i * plot_w / max(1, n - 1))
+        norm = (val - lo) / (hi - lo)
+        py = plot_y + plot_h - int(norm * plot_h)
+        coords.append((px, py))
+
+    if fill and len(coords) >= 2:
+        area = coords + [(coords[-1][0], plot_y + plot_h), (coords[0][0], plot_y + plot_h)]
+        draw.polygon(area, fill=fill)
+
+    if len(coords) >= 2:
+        draw.line(coords, fill=color, width=3)
+    elif coords:
+        draw.ellipse((coords[0][0] - 4, coords[0][1] - 4, coords[0][0] + 4, coords[0][1] + 4), fill=color)
+
+
+def _draw_precip_graph(
+    draw: ImageDraw.ImageDraw,
+    x: int,
+    y: int,
+    width: int,
+    height: int,
+    values: list[float],
+    *,
+    color,
+) -> None:
+    if not values:
+        return
+    pad_top = 22
+    plot_x = x + 44
+    plot_y = y + pad_top
+    plot_w = width - 52
+    plot_h = height - pad_top - 8
+    draw.rectangle((x, y, x + width, y + height), outline=INKY_PALETTE["BLACK"], width=1)
+    label_font = _load_font(14, bold=True)
+    draw.text((x + 8, y + 4), "Rain %", fill=INKY_PALETTE["BLACK"], font=label_font)
+    n = len(values)
+    bar_w = max(2, plot_w // max(1, n) - 2)
+    for i, val in enumerate(values):
+        bx = plot_x + int(i * plot_w / max(1, n - 1)) - bar_w // 2
+        bh = int((max(0.0, min(100.0, val)) / 100.0) * plot_h)
+        by = plot_y + plot_h - bh
+        draw.rectangle((bx, by, bx + bar_w, plot_y + plot_h), fill=color)
+
+
+def render_weather(target: RenderTarget, payload: dict) -> bytes:
+    current = payload.get("current", {})
+    hourly = payload.get("hourly", [])
+    code = int(current.get("code", 0))
+    theme = _weather_theme(code)
+    accent = theme["accent"]
+    secondary = theme["secondary"]
+    tint = theme["tint"]
+
+    img = Image.new("RGB", (target.width, target.height), tint)
+    draw = ImageDraw.Draw(img)
+
+    scale = target.height / 480
+    hero_h = int(target.height * 0.42)
+    graph_h = int(target.height * 0.22)
+    footer_h = target.height - hero_h - graph_h * 2 - int(12 * scale)
+    margin = int(16 * scale)
+
+    draw.rectangle((0, 0, target.width, int(10 * scale)), fill=accent)
+    icon_size = int(min(hero_h * 0.7, target.width * 0.22))
+    icon_cx = margin + icon_size // 2
+    icon_cy = hero_h // 2 + int(8 * scale)
+    _draw_weather_icon(draw, icon_cx, icon_cy, icon_size, theme["icon"], accent, secondary)
+
+    temp_font = _load_font(int(72 * scale), bold=True)
+    cond_font = _load_font(int(22 * scale))
+    meta_font = _load_font(int(16 * scale))
+    unit_sym = "\N{DEGREE SIGN}F" if payload.get("units") == "fahrenheit" else "\N{DEGREE SIGN}C"
+    temp_text = f"{int(round(current.get('temperature', 0)))}{unit_sym}"
+    tx = icon_cx + icon_size // 2 + margin
+    ty = int(hero_h * 0.22)
+    draw.text((tx, ty), temp_text, fill=INKY_PALETTE["BLACK"], font=temp_font)
+    draw.text((tx, ty + int(78 * scale)), current.get("description", ""), fill=secondary, font=cond_font)
+    draw.text(
+        (tx, ty + int(110 * scale)),
+        f"Humidity {int(round(current.get('humidity', 0)))}%",
+        fill=INKY_PALETTE["BLACK"],
+        font=meta_font,
+    )
+
+    graph_y = hero_h + int(6 * scale)
+    graph_w = (target.width - margin * 3) // 2
+    temps = _series_values(hourly, "temperature")
+    precips = _series_values(hourly, "precip_prob")
+    temp_fmt = lambda v: f"{int(round(v))}{unit_sym[-1:]}"
+    _draw_series_graph(
+        draw,
+        margin,
+        graph_y,
+        graph_w,
+        graph_h,
+        temps,
+        color=accent,
+        fill=tint,
+        label="Temp",
+        value_fmt=temp_fmt,
+    )
+    _draw_precip_graph(
+        draw,
+        margin * 2 + graph_w,
+        graph_y,
+        graph_w,
+        graph_h,
+        precips,
+        color=secondary,
+    )
+
+    wind_graph_y = graph_y + graph_h + int(6 * scale)
+    winds = _series_values(hourly, "wind_speed")
+    wind_unit = payload.get("wind_unit", "km/h")
+    _draw_series_graph(
+        draw,
+        margin,
+        wind_graph_y,
+        target.width - margin * 2,
+        graph_h,
+        winds,
+        color=accent,
+        label=f"Wind ({wind_unit})",
+        value_fmt=lambda v: str(int(round(v))),
+    )
+
+    footer_y = target.height - footer_h
+    draw.rectangle((0, footer_y, target.width, target.height), fill=INKY_PALETTE["WHITE"])
+    draw.line((margin, footer_y, target.width - margin, footer_y), fill=accent, width=2)
+    footer_font = _load_font(int(18 * scale), bold=True)
+    detail_font = _load_font(int(16 * scale))
+    wind_now = int(round(current.get("wind_speed", 0)))
+    sunrise = payload.get("sunrise") or "--:--"
+    sunset = payload.get("sunset") or "--:--"
+    cols = [
+        ("Sunrise", sunrise),
+        ("Sunset", sunset),
+        (f"Wind now", f"{wind_now} {wind_unit}"),
+    ]
+    col_w = (target.width - margin * 2) // len(cols)
+    for i, (label, value) in enumerate(cols):
+        cx = margin + i * col_w
+        draw.text((cx, footer_y + int(10 * scale)), label, fill=secondary, font=detail_font)
+        draw.text((cx, footer_y + int(32 * scale)), value, fill=INKY_PALETTE["BLACK"], font=footer_font)
 
     return _to_jpeg(img)
 
 
-def render_bbc(target: RenderTarget, headlines: list[dict]) -> bytes:
+def _draw_qr_code(draw: ImageDraw.ImageDraw, ox: int, oy: int, size: int, payload: str) -> None:
+    if not payload:
+        return
+    qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=1, border=0)
+    qr.add_data(payload)
+    qr.make(fit=True)
+    matrix = qr.get_matrix()
+    modules = len(matrix)
+    module_size = max(1, size // modules)
+    drawn = module_size * modules
+    draw.rectangle((ox, oy, ox + drawn, oy + drawn), fill=INKY_PALETTE["WHITE"])
+    for row, line in enumerate(matrix):
+        for col, on in enumerate(line):
+            if on:
+                px = ox + col * module_size
+                py = oy + row * module_size
+                draw.rectangle(
+                    (px, py, px + module_size - 1, py + module_size - 1),
+                    fill=INKY_PALETTE["BLACK"],
+                )
+
+
+def _magazine_layout_scale(target: RenderTarget) -> tuple[float, float]:
+    base_w, base_h = 800, 480
+    return target.width / base_w, target.height / base_h
+
+
+def _draw_reddit_icon(draw: ImageDraw.ImageDraw, x: int, y: int, size: int) -> None:
+    """Simplified Reddit Snoo mark for the header."""
+    orange = REDDIT_ORANGE
+    white = INKY_PALETTE["WHITE"]
+    black = INKY_PALETTE["BLACK"]
+
+    draw.ellipse((x, y, x + size, y + size), fill=orange, outline=black, width=max(1, size // 16))
+
+    pad = max(2, size // 6)
+    face = (x + pad, y + pad + size // 10, x + size - pad, y + size - pad)
+    draw.ellipse(face, fill=white, outline=black, width=max(1, size // 18))
+
+    cx = x + size // 2
+    antenna_h = max(3, size // 5)
+    stem_top = y + pad // 2
+    draw.line((cx, face[1], cx, stem_top + antenna_h), fill=orange, width=max(2, size // 10))
+    dot_r = max(2, size // 10)
+    draw.ellipse((cx - dot_r, stem_top, cx + dot_r, stem_top + dot_r * 2), fill=orange, outline=black)
+
+    eye_r = max(2, size // 14)
+    eye_y = y + size // 2 - size // 14
+    draw.ellipse((cx - size // 5 - eye_r, eye_y - eye_r, cx - size // 5 + eye_r, eye_y + eye_r), fill=orange)
+    draw.ellipse((cx + size // 5 - eye_r, eye_y - eye_r, cx + size // 5 + eye_r, eye_y + eye_r), fill=orange)
+
+    smile_y = y + size // 2 + size // 8
+    draw.arc(
+        (cx - size // 4, smile_y - size // 10, cx + size // 4, smile_y + size // 5),
+        start=200,
+        end=340,
+        fill=orange,
+        width=max(2, size // 12),
+    )
+
+
+def _render_magazine_layout(
+    target: RenderTarget,
+    *,
+    items: list[dict],
+    header_text: str,
+    header_color: tuple[int, int, int],
+    title_color: tuple[int, int, int],
+    body_color: tuple[int, int, int],
+    header_icon: Callable[[ImageDraw.ImageDraw, int, int, int], None] | None = None,
+    empty_title: str = "Unable to display feed!",
+    empty_hint: str = "Check your settings in the portal.",
+) -> bytes:
+    """Two-story magazine layout with QR codes (Pimoroni news_headlines style)."""
     img, draw = _new_canvas(target)
+    sx, sy = _magazine_layout_scale(target)
 
-    bar_h = 56
-    draw.rectangle((0, 0, target.width, bar_h), fill=INKY_PALETTE["RED"])
-    title_font = _load_font(28, bold=True)
-    draw.text((20, 12), "BBC Headlines", fill=INKY_PALETTE["WHITE"], font=title_font)
+    def px(x: float) -> int:
+        return int(x * sx)
 
-    head_font = _load_font(22, bold=True)
-    body_font = _load_font(16)
-    y = bar_h + 16
-    block_h = (target.height - bar_h - 32) // max(1, min(4, len(headlines)))
-    for item in headlines[:4]:
-        title = item.get("title", "")
-        desc = item.get("description", "")
-        title_lines = _wrap(draw, title, head_font, target.width - 40)[:2]
-        for line in title_lines:
-            draw.text((20, y), line, fill=INKY_PALETTE["BLACK"], font=head_font)
-            y += 28
-        desc_lines = _wrap(draw, desc, body_font, target.width - 40)[:2]
-        for line in desc_lines:
-            draw.text((20, y), line, fill=INKY_PALETTE["BLUE"], font=body_font)
-            y += 20
-        y += 8
-        draw.line((20, y, target.width - 20, y), fill=INKY_PALETTE["BLACK"], width=1)
-        y += 6
-        if y >= bar_h + block_h * 4:
-            break
+    def py(y: float) -> int:
+        return int(y * sy)
 
+    def psize(s: float) -> int:
+        return max(1, int(s * min(sx, sy)))
+
+    black = INKY_PALETTE["BLACK"]
+    header_h = py(40)
+    footer_h = py(20)
+    qr_size = psize(100)
+    icon_size = psize(34) if header_icon else 0
+    header_text_x = px(10) + icon_size + (px(8) if icon_size else 0)
+
+    if not items:
+        mid = target.height // 2
+        draw.rectangle((0, mid - py(20), target.width, mid + py(20)), fill=header_color)
+        draw_text(draw, px(5), mid - py(15), empty_title, black, max_width=target.width - px(10), scale=psize(2))
+        draw_text(draw, px(5), mid + py(2), empty_hint, black, max_width=target.width - px(10), scale=psize(2))
+        return _to_jpeg(img)
+
+    draw.rectangle((0, 0, target.width, header_h), fill=header_color)
+    if header_icon:
+        header_icon(draw, px(6), py(4), icon_size)
+    draw_text(
+        draw,
+        header_text_x,
+        py(10),
+        header_text,
+        black,
+        max_width=target.width - header_text_x - px(10),
+        scale=psize(3),
+    )
+
+    first = items[0]
+    second = items[1] if len(items) > 1 else None
+
+    title0 = first.get("title", "") or "Untitled"
+    desc0 = first.get("description", "") or ""
+    title_scale0 = psize(3) if measure_text(title0) < target.width else psize(2)
+    desc_y0 = py(155) if measure_text(title0) < px(650) else py(130)
+    draw_text(draw, px(10), py(70), title0, title_color, max_width=target.width - px(150), scale=title_scale0)
+    draw_text(draw, px(10), desc_y0, desc0, body_color, max_width=target.width - px(150), scale=psize(2))
+    _draw_qr_code(draw, target.width - px(110), py(65), qr_size, first.get("guid") or first.get("link") or "")
+
+    draw.line((px(10), py(215), target.width - px(10), py(215)), fill=black, width=max(1, psize(1)))
+
+    if second:
+        title1 = second.get("title", "") or "Untitled"
+        desc1 = second.get("description", "") or ""
+        title_scale1 = psize(3) if measure_text(title1) < target.width else psize(2)
+        desc_y1 = py(320) if measure_text(title1) < px(650) else py(340)
+        draw_text(draw, px(130), py(260), title1, title_color, max_width=target.width - px(140), scale=title_scale1)
+        draw_text(draw, px(130), desc_y1, desc1, body_color, max_width=target.width - px(145), scale=psize(2))
+        _draw_qr_code(draw, px(10), py(265), qr_size, second.get("guid") or second.get("link") or "")
+
+    draw.rectangle((0, target.height - footer_h, target.width, target.height), fill=header_color)
     return _to_jpeg(img)
+
+
+def render_rss_magazine(target: RenderTarget, feed_title: str, items: list[dict]) -> bytes:
+    return _render_magazine_layout(
+        target,
+        items=items,
+        header_text=f"Headlines from {feed_title}:",
+        header_color=INKY_PALETTE["RED"],
+        title_color=INKY_PALETTE["RED"],
+        body_color=INKY_PALETTE["BLUE"],
+        empty_hint="Check the feed URL in the portal.",
+    )
+
+
+def render_reddit_magazine(target: RenderTarget, label: str, items: list[dict]) -> bytes:
+    return _render_magazine_layout(
+        target,
+        items=items,
+        header_text=f"{label}:",
+        header_color=REDDIT_ORANGE,
+        title_color=REDDIT_ORANGE,
+        body_color=INKY_PALETTE["BLUE"],
+        header_icon=_draw_reddit_icon,
+        empty_title="Unable to load subreddit!",
+        empty_hint="Check the subreddit name in the portal.",
+    )

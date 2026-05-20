@@ -21,12 +21,13 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import get_settings
-from ..content import bbc, weather, xkcd
+from ..content import reddit, rss, weather, xkcd
 from ..content.renderer import (
     RenderTarget,
-    render_bbc,
     render_inbox_image,
     render_inbox_text,
+    render_reddit_magazine,
+    render_rss_magazine,
     render_title_body,
     render_weather,
     render_xkcd,
@@ -131,7 +132,7 @@ async def _resolve_inbox(
     return jpeg, {"kind": item.kind, "inbox_id": item.id}
 
 
-async def _resolve_weather(frame: Frame, target: RenderTarget) -> bytes:
+async def _resolve_weather(frame: Frame, target: RenderTarget, config: Optional[dict] = None) -> bytes:
     if frame.latitude is None or frame.longitude is None:
         return render_title_body(
             target,
@@ -139,9 +140,15 @@ async def _resolve_weather(frame: Frame, target: RenderTarget) -> bytes:
             body="No location configured.\nUpdate it in the portal.",
             accent="BLUE",
         )
+    units = (config or {}).get("units", "celsius")
     try:
-        data = await weather.fetch_weather(frame.latitude, frame.longitude, frame.timezone)
-        return render_weather(target, data["current"], data["forecast"])
+        data = await weather.fetch_weather(
+            frame.latitude,
+            frame.longitude,
+            frame.timezone,
+            units=units,
+        )
+        return render_weather(target, data)
     except Exception as e:
         return render_title_body(target, "Local Weather", f"Could not fetch weather:\n{e}", accent="RED")
 
@@ -154,12 +161,27 @@ async def _resolve_xkcd(target: RenderTarget) -> bytes:
         return render_title_body(target, "XKCD", f"Could not fetch comic:\n{e}", accent="RED")
 
 
-async def _resolve_bbc(target: RenderTarget, feed: Optional[str]) -> bytes:
+async def _resolve_rss(target: RenderTarget, config: Optional[dict]) -> bytes:
+    cfg = config or {}
+    feed_url = cfg.get("feed_url")
+    feed_title = cfg.get("feed_title")
     try:
-        items = await bbc.fetch_bbc(feed)
-        return render_bbc(target, items)
+        payload = await rss.fetch_rss(feed_url)
+        title = feed_title or payload.get("title") or rss.DEFAULT_TITLE
+        return render_rss_magazine(target, title, payload.get("items", []))
     except Exception as e:
-        return render_title_body(target, "BBC", f"Could not fetch headlines:\n{e}", accent="RED")
+        return render_title_body(target, "RSS", f"Could not fetch feed:\n{e}", accent="RED")
+
+
+async def _resolve_reddit(target: RenderTarget, config: Optional[dict]) -> bytes:
+    cfg = config or {}
+    subreddit = cfg.get("subreddit") if "subreddit" in cfg else None
+    try:
+        payload = await reddit.fetch_reddit(subreddit)
+        label = payload.get("label") or reddit.display_label(subreddit)
+        return render_reddit_magazine(target, label, payload.get("items", []))
+    except Exception as e:
+        return render_title_body(target, "Reddit", f"Could not fetch subreddit:\n{e}", accent="ORANGE")
 
 
 async def _resolve_plugin(
@@ -268,7 +290,7 @@ async def resolve_next_for_frame(
         response.image_url = _image_url(token, asset_base_url)
         response.text = None
     elif item.item_type == "weather":
-        jpeg = await _resolve_weather(frame, target)
+        jpeg = await _resolve_weather(frame, target, item.config)
         token = await _cache_jpeg(session, jpeg)
         response.type = "image"
         response.image_url = _image_url(token, asset_base_url)
@@ -279,9 +301,14 @@ async def resolve_next_for_frame(
         response.type = "image"
         response.image_url = _image_url(token, asset_base_url)
         response.text = None
-    elif item.item_type == "bbc":
-        feed = (item.config or {}).get("feed_url") if item.config else None
-        jpeg = await _resolve_bbc(target, feed)
+    elif item.item_type in ("rss", "bbc"):
+        jpeg = await _resolve_rss(target, item.config)
+        token = await _cache_jpeg(session, jpeg)
+        response.type = "image"
+        response.image_url = _image_url(token, asset_base_url)
+        response.text = None
+    elif item.item_type == "reddit":
+        jpeg = await _resolve_reddit(target, item.config)
         token = await _cache_jpeg(session, jpeg)
         response.type = "image"
         response.image_url = _image_url(token, asset_base_url)

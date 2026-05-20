@@ -91,7 +91,7 @@ export type FrameWithSecret = Frame & { secret: string };
 export type ScheduleItem = {
   id: string;
   position: number;
-  item_type: "inbox" | "weather" | "xkcd" | "bbc" | "plugin" | "static";
+  item_type: "inbox" | "weather" | "xkcd" | "rss" | "reddit" | "bbc" | "plugin" | "static";
   item_ref: string | null;
   config: Record<string, unknown> | null;
   sleep_minutes: number;

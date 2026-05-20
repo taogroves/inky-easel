@@ -31,14 +31,41 @@ _WMO_DESCRIPTIONS = {
 }
 
 
-async def fetch_weather(latitude: float, longitude: float, timezone: str | None = None) -> dict:
+def _format_time(iso_value: str | None) -> str | None:
+    if not iso_value:
+        return None
+    try:
+        return datetime.fromisoformat(iso_value.replace("Z", "+00:00")).strftime("%H:%M")
+    except ValueError:
+        if "T" in iso_value:
+            return iso_value.split("T", 1)[1][:5]
+        return iso_value[:5]
+
+
+def _normalize_units(units: str | None) -> str:
+    if units and units.lower() in {"f", "fahrenheit", "imperial"}:
+        return "fahrenheit"
+    return "celsius"
+
+
+async def fetch_weather(
+    latitude: float,
+    longitude: float,
+    timezone: str | None = None,
+    units: str | None = None,
+) -> dict:
+    unit = _normalize_units(units)
+    use_fahrenheit = unit == "fahrenheit"
     params = {
         "latitude": latitude,
         "longitude": longitude,
         "current": "temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m",
-        "daily": "temperature_2m_max,temperature_2m_min,weather_code",
+        "hourly": "temperature_2m,precipitation_probability,wind_speed_10m",
+        "daily": "sunrise,sunset",
         "timezone": timezone or "auto",
-        "forecast_days": 4,
+        "forecast_days": 1,
+        "temperature_unit": "fahrenheit" if use_fahrenheit else "celsius",
+        "wind_speed_unit": "mph" if use_fahrenheit else "kmh",
     }
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get("https://api.open-meteo.com/v1/forecast", params=params)
@@ -46,26 +73,44 @@ async def fetch_weather(latitude: float, longitude: float, timezone: str | None 
         data = resp.json()
 
     current_block = data.get("current", {})
+    code = current_block.get("weather_code", 0)
     current = {
         "temperature": current_block.get("temperature_2m", 0),
         "humidity": current_block.get("relative_humidity_2m", 0),
         "wind_speed": current_block.get("wind_speed_10m", 0),
-        "code": current_block.get("weather_code", 0),
-        "description": _WMO_DESCRIPTIONS.get(current_block.get("weather_code", 0), "Unknown"),
+        "code": code,
+        "description": _WMO_DESCRIPTIONS.get(code, "Unknown"),
     }
 
-    daily = data.get("daily", {}) or {}
-    forecast: list[dict] = []
-    for i, day in enumerate(daily.get("time", [])):
+    hourly_block = data.get("hourly", {}) or {}
+    times = hourly_block.get("time", [])
+    temps = hourly_block.get("temperature_2m", [])
+    precip = hourly_block.get("precipitation_probability", [])
+    winds = hourly_block.get("wind_speed_10m", [])
+    hourly: list[dict] = []
+    for i, when in enumerate(times):
         try:
-            label = datetime.strptime(day, "%Y-%m-%d").strftime("%a")
+            hour_label = datetime.fromisoformat(when).strftime("%H")
         except ValueError:
-            label = day
-        forecast.append({
-            "label": label,
-            "high": daily.get("temperature_2m_max", [None])[i] if i < len(daily.get("temperature_2m_max", [])) else None,
-            "low": daily.get("temperature_2m_min", [None])[i] if i < len(daily.get("temperature_2m_min", [])) else None,
-            "code": daily.get("weather_code", [0])[i] if i < len(daily.get("weather_code", [])) else 0,
+            hour_label = when[-5:-3] if len(when) >= 5 else ""
+        hourly.append({
+            "time": when,
+            "hour": hour_label,
+            "temperature": temps[i] if i < len(temps) else None,
+            "precip_prob": precip[i] if i < len(precip) else None,
+            "wind_speed": winds[i] if i < len(winds) else None,
         })
 
-    return {"current": current, "forecast": forecast, "timezone": data.get("timezone")}
+    daily = data.get("daily", {}) or {}
+    sunrise = _format_time((daily.get("sunrise") or [None])[0])
+    sunset = _format_time((daily.get("sunset") or [None])[0])
+
+    return {
+        "current": current,
+        "hourly": hourly,
+        "sunrise": sunrise,
+        "sunset": sunset,
+        "units": unit,
+        "wind_unit": "mph" if use_fahrenheit else "km/h",
+        "timezone": data.get("timezone"),
+    }

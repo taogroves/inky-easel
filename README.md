@@ -36,7 +36,8 @@ self-hosted server.
   10% at wake it draws a fullscreen "plug me in" screen and sleeps an hour.
 
 * **The webserver** stores each user's frame configuration, schedule, plugins,
-  and inbox. It renders weather (Open-Meteo), the latest XKCD, BBC headlines,
+  and inbox. It renders weather (Open-Meteo), the latest XKCD, RSS headlines,
+  Reddit subreddits,
   static text cards, and inbox text/images into JPEGs at the frame's native
   resolution. For custom plugins it just forwards the MicroPython source code.
 
@@ -58,8 +59,9 @@ self-hosted server.
    docker compose up --build
    ```
 4. Open http://localhost:3000, create an account, click **+ New frame**.
-5. Walk through the SD card setup wizard. Plug the SD card into the frame and
-   tap reset.
+5. Walk through the setup wizard. Either write the bundle to a microSD card, or
+   flash over USB with `python frame-firmware/flash_to_pico.py <bundle.zip>`
+   (see `frame-firmware/README.md`). Then tap reset.
 6. Build a schedule. Watch it loop.
 
 See `webserver/README.md` and `frame-firmware/README.md` for component-level

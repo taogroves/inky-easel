@@ -44,6 +44,30 @@ FAT32-formatted card".
 You do **not** need to flash a custom UF2; the stock Pimoroni Inky Frame
 MicroPython build with the `-with-examples` package is sufficient.
 
+## Flash over USB (no SD card)
+
+Use `flash_to_pico.py` to copy a portal setup bundle onto internal flash. You
+still generate Wi-Fi and frame credentials in the setup wizard (ZIP download or
+any folder with the same files); the CLI only uploads them.
+
+```bash
+pip install -r frame-firmware/requirements-flash.txt
+python frame-firmware/flash_to_pico.py ~/Downloads/inky-easel-my-frame.zip
+```
+
+Plug the Inky Frame in over USB, run the command, then unplug or press reset.
+The bundle's `main.py` starts `inky_easel_app.py` from flash. Image downloads
+use `/_content.jpg` on flash when no SD card is present.
+
+Options:
+
+| Flag | Purpose |
+| --- | --- |
+| `--list-devices` | Show serial ports mpremote can use |
+| `--device PATH` | Pick a board when several are connected |
+| `--dry-run` | Print the file list without copying |
+| `--install-sd-loader` | One-time: write `flash_loader_main.py` as `main.py` for the SD workflow |
+
 ## Local testing
 
 You can drop the SD app files onto a USB-connected Inky Frame via Thonny to test

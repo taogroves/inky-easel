@@ -15,9 +15,10 @@ type EditorItem = {
 
 const PRESETS: Array<{ value: EditorItem["item_type"]; label: string; description: string; defaultSleep: number }> = [
   { value: "inbox", label: "Inbox", description: "Show the next unread message from another user.", defaultSleep: 180 },
-  { value: "weather", label: "Weather", description: "Current conditions + 4-day forecast for the configured location.", defaultSleep: 60 },
+  { value: "weather", label: "Weather", description: "Today's conditions with hourly temp, rain chance, wind, and sun times.", defaultSleep: 60 },
   { value: "xkcd", label: "Daily XKCD", description: "The latest XKCD comic.", defaultSleep: 720 },
-  { value: "bbc", label: "BBC headlines", description: "Top headlines from a BBC RSS feed.", defaultSleep: 120 },
+  { value: "rss", label: "RSS headlines", description: "Magazine-style headlines from any RSS feed (Pimoroni BBC layout).", defaultSleep: 120 },
+  { value: "reddit", label: "Reddit", description: "Top posts from a subreddit with QR links (Reddit RSS).", defaultSleep: 120 },
   { value: "static", label: "Static text", description: "A fixed title + body you write here.", defaultSleep: 240 },
   { value: "plugin", label: "Custom plugin", description: "Run one of your MicroPython plugins.", defaultSleep: 60 },
 ];
@@ -26,7 +27,9 @@ function blankFor(type: EditorItem["item_type"]): EditorItem {
   const preset = PRESETS.find((p) => p.value === type) ?? PRESETS[0];
   let config: Record<string, unknown> | null = null;
   if (type === "static") config = { title: "Hello", body: "Some text", accent: "BLUE" };
-  if (type === "bbc") config = { feed_url: "https://feeds.bbci.co.uk/news/rss.xml" };
+  if (type === "rss") config = { feed_url: "https://feeds.bbci.co.uk/news/rss.xml" };
+  if (type === "reddit") config = { subreddit: "news" };
+  if (type === "weather") config = { units: "celsius" };
   return { item_type: type, item_ref: null, config, sleep_minutes: preset.defaultSleep, start_minute: null };
 }
 
@@ -215,14 +218,55 @@ export default function ScheduleEditor({
                     </>
                   )}
 
-                  {item.item_type === "bbc" && (
+                  {item.item_type === "weather" && (
+                    <div>
+                      <label className="label">Temperature units</label>
+                      <select
+                        className="input"
+                        value={String((item.config as { units?: string })?.units ?? "celsius")}
+                        onChange={(e) => update(idx, { config: { ...item.config, units: e.target.value } })}
+                      >
+                        <option value="celsius">Celsius (°C, km/h wind)</option>
+                        <option value="fahrenheit">Fahrenheit (°F, mph wind)</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {(item.item_type === "rss" || item.item_type === "bbc") && (
+                    <>
+                      <div className="md:col-span-2">
+                        <label className="label">RSS feed URL</label>
+                        <input
+                          className="input"
+                          placeholder="https://example.com/feed.xml"
+                          value={String((item.config as { feed_url?: string })?.feed_url ?? "")}
+                          onChange={(e) => update(idx, { config: { ...item.config, feed_url: e.target.value } })}
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="label">Header title (optional)</label>
+                        <input
+                          className="input"
+                          placeholder="Leave blank to use the feed title"
+                          value={String((item.config as { feed_title?: string })?.feed_title ?? "")}
+                          onChange={(e) => update(idx, { config: { ...item.config, feed_title: e.target.value } })}
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {item.item_type === "reddit" && (
                     <div className="md:col-span-2">
-                      <label className="label">RSS feed URL</label>
+                      <label className="label">Subreddit</label>
                       <input
                         className="input"
-                        value={String((item.config as any)?.feed_url ?? "")}
-                        onChange={(e) => update(idx, { config: { ...item.config, feed_url: e.target.value } })}
+                        placeholder="news, worldnews, or front for the home feed"
+                        value={String((item.config as { subreddit?: string })?.subreddit ?? "")}
+                        onChange={(e) => update(idx, { config: { ...item.config, subreddit: e.target.value } })}
                       />
+                      <p className="mt-1 text-xs text-ink-soft">
+                        Uses Reddit&apos;s public RSS feed (e.g. r/news → reddit.com/r/news/.rss).
+                      </p>
                     </div>
                   )}
 
