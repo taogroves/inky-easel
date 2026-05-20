@@ -97,6 +97,12 @@ Summary: base directory `webserver`, Docker Compose build pack, assign
 `https://your-portal:3000` to `portal` and `https://your-api:8000` to `api`, leave
 `db` private, set `PUBLIC_BASE_URL` to the API URL.
 
+## Bare-metal deployment
+
+See **[bare-metal.md](./bare-metal.md)** to deploy directly with Docker Compose
+on a server and point Cloudflare Tunnel at custom localhost ports. This is useful
+when `3000`, `8000`, or Coolify/Traefik are already in use.
+
 ## Manual smoke tests
 
 Once the stack is up:
