@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from .rss import DEFAULT_LIMIT, _strip_html, fetch_feed_url
+from .url_clean import pick_shortest_url
 
 REDDIT_ORANGE = (255, 69, 0)
 DEFAULT_SUBREDDIT = "news"
@@ -67,7 +68,7 @@ async def fetch_reddit(
             "title": title,
             "description": desc,
             "link": entry.get("link", ""),
-            "guid": entry.get("guid") or entry.get("link", ""),
+            "guid": pick_shortest_url(entry.get("link", ""), entry.get("guid", "")),
         })
 
     feed_title = _strip_html(payload.get("title", "") or label)

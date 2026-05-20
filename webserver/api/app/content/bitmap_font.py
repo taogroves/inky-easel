@@ -93,10 +93,12 @@ def draw_text(
                 cursor_x += 4 * scale
                 continue
             gw = WIDTHS[idx]
-            rows = _glyph_bytes(idx)
-            for row_i, row_byte in enumerate(rows):
-                for col_i in range(FONT_MAX_WIDTH):
-                    if row_byte & (1 << (FONT_MAX_WIDTH - 1 - col_i)):
+            glyph = _glyph_bytes(idx)
+            # Font8 stores one byte per column; bit N is row N (see pimoroni bitmap_fonts.cpp).
+            for col_i in range(gw):
+                col_byte = glyph[col_i]
+                for row_i in range(FONT_HEIGHT):
+                    if col_byte & (1 << row_i):
                         px = cursor_x + col_i * scale
                         py = cursor_y + row_i * scale
                         if scale == 1:

@@ -8,6 +8,8 @@ from html import unescape
 import feedparser
 import httpx
 
+from .url_clean import pick_shortest_url
+
 DEFAULT_FEED = "https://feeds.bbci.co.uk/news/rss.xml"
 DEFAULT_TITLE = "BBC News"
 DEFAULT_LIMIT = 2
@@ -22,11 +24,8 @@ def _strip_html(text: str) -> str:
 
 def _qr_payload(entry) -> str:
     link = getattr(entry, "link", "") or ""
-    guid = getattr(entry, "id", "") or getattr(entry, "guid", "") or ""
-    guid = str(guid).strip()
-    if guid.startswith("http"):
-        return guid
-    return link or guid
+    guid = str(getattr(entry, "id", "") or getattr(entry, "guid", "") or "").strip()
+    return pick_shortest_url(link, guid)
 
 
 async def fetch_feed_url(

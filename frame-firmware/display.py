@@ -28,8 +28,6 @@ def draw_battery_overlay(graphics, width, percent, charging=False):
     x = width - body_w - tip_w - pad
     y = pad
 
-    graphics.set_pen(WHITE)
-    graphics.rectangle(x - 2, y - 2, body_w + tip_w + 4, body_h + 4)
     graphics.set_pen(BLACK)
     graphics.rectangle(x, y, body_w, body_h)
     graphics.set_pen(WHITE)
@@ -63,11 +61,21 @@ def draw_low_battery_overlay(graphics, width, percent):
 
 
 def _draw_lightning_bolt(graphics, x, y):
-    # Drawn as chunky rectangles so it works on PicoGraphics without polygons.
-    graphics.rectangle(x + 7, y, 5, 9)
-    graphics.rectangle(x + 4, y + 7, 7, 5)
-    graphics.rectangle(x + 1, y + 11, 6, 4)
-    graphics.rectangle(x + 5, y + 12, 5, 9)
+    pixel = 2
+    rows = (
+        "....XX",
+        "...XX.",
+        "..XX..",
+        ".XXXXX",
+        "...XX.",
+        "..XX..",
+        ".XX...",
+        "XX....",
+    )
+    for row, cells in enumerate(rows):
+        for col, cell in enumerate(cells):
+            if cell == "X":
+                graphics.rectangle(x + col * pixel, y + row * pixel, pixel, pixel)
 
 
 def draw_critical_battery_screen(graphics, width, height):

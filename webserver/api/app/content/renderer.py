@@ -22,6 +22,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from .bitmap_font import draw_text, measure_text
 from .reddit import REDDIT_ORANGE
+from .url_clean import clean_url_for_qr
 
 INKY_PALETTE = {
     "BLACK": (0, 0, 0),
@@ -532,26 +533,40 @@ def render_weather(target: RenderTarget, payload: dict) -> bytes:
     return _to_jpeg(img)
 
 
-def _draw_qr_code(draw: ImageDraw.ImageDraw, ox: int, oy: int, size: int, payload: str) -> None:
+def _draw_qr_code(img: Image.Image, ox: int, oy: int, size: int, payload: str) -> None:
+    payload = clean_url_for_qr(payload)
     if not payload:
         return
-    qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=1, border=0)
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=1,
+        border=0,
+    )
     qr.add_data(payload)
     qr.make(fit=True)
     matrix = qr.get_matrix()
     modules = len(matrix)
-    module_size = max(1, size // modules)
-    drawn = module_size * modules
-    draw.rectangle((ox, oy, ox + drawn, oy + drawn), fill=INKY_PALETTE["WHITE"])
+    if modules == 0:
+        return
+
+    tile = Image.new("1", (modules, modules), 1)
+    px_map = tile.load()
     for row, line in enumerate(matrix):
         for col, on in enumerate(line):
             if on:
-                px = ox + col * module_size
-                py = oy + row * module_size
-                draw.rectangle(
-                    (px, py, px + module_size - 1, py + module_size - 1),
-                    fill=INKY_PALETTE["BLACK"],
-                )
+                px_map[col, row] = 0
+
+    scaled = tile.resize((size, size), Image.NEAREST)
+    qr_rgb = Image.new("RGB", (size, size), INKY_PALETTE["WHITE"])
+    src = scaled.load()
+    dst = qr_rgb.load()
+    black = INKY_PALETTE["BLACK"]
+    white = INKY_PALETTE["WHITE"]
+    for y in range(size):
+        for x in range(size):
+            dst[x, y] = black if src[x, y] == 0 else white
+    img.paste(qr_rgb, (ox, oy))
 
 
 def _magazine_layout_scale(target: RenderTarget) -> tuple[float, float]:
@@ -654,7 +669,7 @@ def _render_magazine_layout(
     desc_y0 = py(155) if measure_text(title0) < px(650) else py(130)
     draw_text(draw, px(10), py(70), title0, title_color, max_width=target.width - px(150), scale=title_scale0)
     draw_text(draw, px(10), desc_y0, desc0, body_color, max_width=target.width - px(150), scale=psize(2))
-    _draw_qr_code(draw, target.width - px(110), py(65), qr_size, first.get("guid") or first.get("link") or "")
+    _draw_qr_code(img, target.width - px(110), py(65), qr_size, first.get("guid") or first.get("link") or "")
 
     draw.line((px(10), py(215), target.width - px(10), py(215)), fill=black, width=max(1, psize(1)))
 
@@ -665,7 +680,7 @@ def _render_magazine_layout(
         desc_y1 = py(320) if measure_text(title1) < px(650) else py(340)
         draw_text(draw, px(130), py(260), title1, title_color, max_width=target.width - px(140), scale=title_scale1)
         draw_text(draw, px(130), desc_y1, desc1, body_color, max_width=target.width - px(145), scale=psize(2))
-        _draw_qr_code(draw, px(10), py(265), qr_size, second.get("guid") or second.get("link") or "")
+        _draw_qr_code(img, px(10), py(265), qr_size, second.get("guid") or second.get("link") or "")
 
     draw.rectangle((0, target.height - footer_h, target.width, target.height), fill=header_color)
     return _to_jpeg(img)
