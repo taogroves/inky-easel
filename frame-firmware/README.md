@@ -57,7 +57,8 @@ python frame-firmware/flash_to_pico.py ~/Downloads/inky-easel-my-frame.zip
 
 Plug the Inky Frame in over USB, run the command, then unplug or press reset.
 The bundle's `main.py` starts `inky_easel_app.py` from flash. Image downloads
-use `/_content.jpg` on flash when no SD card is present.
+use `/_content.jpg` on flash when no SD card is present (plugins use
+`/_plugin.py`). Re-flash after firmware updates so these fixes reach the board.
 
 Options:
 

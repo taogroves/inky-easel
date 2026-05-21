@@ -419,7 +419,7 @@ def _draw_precip_graph(
 
 
 def _moon_phase_angle(illumination: float | None, waxing: bool) -> float:
-    """Map illuminated fraction to terminator angle (radians, 0=new … 2π)."""
+    """Phase angle on the sphere (radians): 0 = new, π = full."""
     frac = max(0.0, min(1.0, (illumination if illumination is not None else 50.0) / 100.0))
     if frac >= 0.999:
         return math.pi
@@ -430,41 +430,41 @@ def _moon_phase_angle(illumination: float | None, waxing: bool) -> float:
 
 
 def _render_moon_phase_image(size: int, illumination: float | None, *, waxing: bool = True) -> Image.Image:
-    """Terminator + 2° soft edge per celestialprogramming.com/moonPhaseRender."""
-    diameter = max(16, size)
+    """Spherical terminator with 2° soft edge (celestialprogramming.com/moonPhaseRender)."""
+    diameter = max(32, size * 2)
     r = diameter / 2.0
     dark = (48, 52, 68)
     light = (232, 236, 244)
-    limb = (90, 95, 110)
     moon = Image.new("RGBA", (diameter, diameter), (0, 0, 0, 0))
     pixels = moon.load()
-    theta = _moon_phase_angle(illumination, waxing)
-    terminator_x = r * math.cos(theta)
-    grad = r * math.radians(2.0)
+    phase = _moon_phase_angle(illumination, waxing)
+    cos_p = math.cos(phase)
+    sin_p = math.sin(phase)
+    grad = math.radians(2.0)
 
     for py in range(diameter):
         for px in range(diameter):
-            dx = px - r + 0.5
-            dy = py - r + 0.5
-            dist_sq = dx * dx + dy * dy
-            if dist_sq > r * r:
+            nx = (px - r + 0.5) / r
+            ny = (py - r + 0.5) / r
+            if nx * nx + ny * ny > 1.0:
                 continue
+            nz = math.sqrt(1.0 - nx * nx - ny * ny)
             if waxing:
-                edge_dist = dx - terminator_x
+                metric = cos_p * nx - sin_p * nz
             else:
-                edge_dist = terminator_x - dx
-            if edge_dist >= grad:
+                metric = -cos_p * nx + sin_p * nz
+            if metric >= grad:
                 t = 1.0
-            elif edge_dist <= -grad:
+            elif metric <= -grad:
                 t = 0.0
             else:
-                t = 0.5 + edge_dist / (2.0 * grad)
+                t = 0.5 + metric / (2.0 * grad)
             shade = tuple(int(dark[i] + t * (light[i] - dark[i])) for i in range(3))
             pixels[px, py] = shade + (255,)
 
-    draw = ImageDraw.Draw(moon)
-    draw.ellipse((0, 0, diameter - 1, diameter - 1), outline=limb, width=max(1, diameter // 32))
-    return moon.convert("RGB")
+    if diameter != size:
+        moon = moon.resize((size, size), Image.LANCZOS)
+    return moon
 
 
 def _paste_moon_phase(
@@ -479,7 +479,7 @@ def _paste_moon_phase(
     moon = _render_moon_phase_image(size, illumination, waxing=waxing)
     ox = cx - moon.width // 2
     oy = cy - moon.height // 2
-    img.paste(moon, (ox, oy))
+    img.paste(moon, (ox, oy), moon)
 
 
 def render_weather(target: RenderTarget, payload: dict) -> bytes:
@@ -594,14 +594,15 @@ def render_weather(target: RenderTarget, payload: dict) -> bytes:
 
     updated = _format_updated_at(payload.get("updated_at"), payload.get("timezone"))
     if updated:
-        stamp_font = _load_font(int(11 * scale))
+        stamp_font = _load_font(max(16, int(16 * scale)), bold=True)
         stamp = f"Updated {updated}"
         bbox = draw.textbbox((0, 0), stamp, font=stamp_font)
         stamp_w = bbox[2] - bbox[0]
+        stamp_h = bbox[3] - bbox[1]
         draw.text(
-            (target.width - margin - stamp_w, target.height - margin - (bbox[3] - bbox[1])),
+            (target.width - margin - stamp_w, target.height - margin - stamp_h),
             stamp,
-            fill=(130, 135, 145),
+            fill=INKY_PALETTE["BLACK"],
             font=stamp_font,
         )
 

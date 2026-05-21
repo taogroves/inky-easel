@@ -136,11 +136,12 @@ def _render(graphics, width, height, response):
             raise RuntimeError("No image URL")
         ih.network_led(100)
         try:
-            frame_client.download_jpeg(url)
+            content_path = frame_client.CONTENT_PATH
+            frame_client.download_jpeg(url, content_path)
         finally:
             ih.stop_network_led()
         scene.clear(graphics)
-        frame_client.render_image(graphics)
+        frame_client.render_image(graphics, content_path)
     elif kind == "text":
         payload = response.get("text") or {}
         accent_name = (payload.get("accent") or "BLUE").upper()
@@ -349,8 +350,9 @@ def main():
 
     sd_ok = _mount_sd()
     if not sd_ok:
-        print("Continuing without SD; image content will be stored in flash.")
+        print("Continuing without SD; content and plugins will use internal flash.")
         frame_client.CONTENT_PATH = "/_content.jpg"
+        frame_client.PLUGIN_PATH = "/_plugin.py"
 
     try:
         from frame_config import DEFAULT_SLEEP_MINUTES, FRAME_ID, FRAME_SECRET, SERVER_URL

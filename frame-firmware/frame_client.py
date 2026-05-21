@@ -34,6 +34,14 @@ PLUGIN_PATH = "/sd/_plugin.py"
 HTTP_TIMEOUT_SECONDS = 20
 
 
+def _content_path():
+    return CONTENT_PATH
+
+
+def _plugin_path():
+    return PLUGIN_PATH
+
+
 class PollError(Exception):
     pass
 
@@ -99,12 +107,18 @@ def poll(server_url, frame_id, secret, battery_voltage, battery_percent, wakeup)
         raise PollError(str(e))
 
 
-def download_jpeg(url, dest=CONTENT_PATH):
+def download_jpeg(url, dest=None):
+    if dest is None:
+        dest = _content_path()
     print("GET", url)
     _set_timeout()
     sock = _urequest.urlopen(url)
     try:
         chunk = bytearray(1024)
+        try:
+            os.remove(dest)
+        except OSError:
+            pass
         with open(dest, "wb") as f:
             while True:
                 n = sock.readinto(chunk)
@@ -120,7 +134,9 @@ def download_jpeg(url, dest=CONTENT_PATH):
         gc.collect()
 
 
-def render_image(graphics, path=CONTENT_PATH):
+def render_image(graphics, path=None):
+    if path is None:
+        path = _content_path()
     import jpegdec
 
     jpeg = jpegdec.JPEG(graphics)
@@ -129,21 +145,23 @@ def render_image(graphics, path=CONTENT_PATH):
 
 
 def run_plugin(graphics, width, height, code, context):
-    """Persist user code to SD then import it so MicroPython compiles it once.
+    """Persist user code then import it so MicroPython compiles it once.
 
     Plugins must define `draw(graphics, width, height, context)`. We import via
     a fresh module name each time by deleting any cached entry first.
     """
-    with open(PLUGIN_PATH, "w") as f:
+    plugin_path = _plugin_path()
+    with open(plugin_path, "w") as f:
         f.write(code)
 
     sys_mod = __import__("sys")
     if "_plugin" in sys_mod.modules:
         del sys_mod.modules["_plugin"]
 
-    sd_in_path = "/sd" in sys_mod.path
-    if not sd_in_path:
-        sys_mod.path.insert(0, "/sd")
+    plugin_dir = os.path.dirname(plugin_path) or "/"
+    added_path = plugin_dir not in sys_mod.path
+    if added_path:
+        sys_mod.path.insert(0, plugin_dir)
 
     try:
         plugin = __import__("_plugin")
@@ -151,12 +169,12 @@ def run_plugin(graphics, width, height, code, context):
             raise RuntimeError("plugin missing draw(graphics, width, height, context)")
         plugin.draw(graphics, width, height, context or {})
     finally:
-        if not sd_in_path and "/sd" in sys_mod.path:
-            sys_mod.path.remove("/sd")
+        if added_path and plugin_dir in sys_mod.path:
+            sys_mod.path.remove(plugin_dir)
         if "_plugin" in sys_mod.modules:
             del sys_mod.modules["_plugin"]
         try:
-            os.remove(PLUGIN_PATH)
+            os.remove(plugin_path)
         except OSError:
             pass
         gc.collect()
