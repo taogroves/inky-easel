@@ -304,6 +304,29 @@ def _draw_weather_icon(draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, i
             )
 
 
+def _draw_refresh_icon(draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, color) -> None:
+    """Circular refresh arrow (↻) for the last-updated stamp."""
+    r = max(5, size // 2 - 1)
+    w = max(2, size // 6)
+    bbox = (cx - r, cy - r, cx + r, cy + r)
+    draw.arc(bbox, start=50, end=310, fill=color, width=w)
+    angle = math.radians(310)
+    tip_x = cx + r * math.cos(angle)
+    tip_y = cy + r * math.sin(angle)
+    wing = max(3, size // 4)
+    along = math.radians(280)
+    draw.polygon(
+        [
+            (tip_x, tip_y),
+            (tip_x - wing * math.cos(along) + wing * 0.5 * math.sin(along),
+             tip_y - wing * math.sin(along) - wing * 0.5 * math.cos(along)),
+            (tip_x - wing * math.cos(along) - wing * 0.5 * math.sin(along),
+             tip_y - wing * math.sin(along) + wing * 0.5 * math.cos(along)),
+        ],
+        fill=color,
+    )
+
+
 def _format_updated_at(iso_value: str | None, timezone: str | None) -> str | None:
     if not iso_value:
         return None
@@ -603,16 +626,17 @@ def render_weather(target: RenderTarget, payload: dict) -> bytes:
     updated = _format_updated_at(payload.get("updated_at"), payload.get("timezone"))
     if updated:
         stamp_font = _load_font(max(16, int(16 * scale)), bold=True)
-        stamp = f"Updated {updated}"
-        bbox = draw.textbbox((0, 0), stamp, font=stamp_font)
-        stamp_w = bbox[2] - bbox[0]
-        stamp_h = bbox[3] - bbox[1]
-        draw.text(
-            (target.width - margin - stamp_w, target.height - margin - stamp_h),
-            stamp,
-            fill=INKY_PALETTE["BLACK"],
-            font=stamp_font,
-        )
+        time_bbox = draw.textbbox((0, 0), updated, font=stamp_font)
+        time_w = time_bbox[2] - time_bbox[0]
+        time_h = time_bbox[3] - time_bbox[1]
+        icon_size = max(12, int(14 * scale))
+        gap = max(3, int(4 * scale))
+        stamp_y = target.height - margin - time_h
+        text_x = target.width - margin - time_w
+        icon_cx = text_x - gap - icon_size // 2
+        icon_cy = stamp_y + time_h // 2
+        _draw_refresh_icon(draw, icon_cx, icon_cy, icon_size, INKY_PALETTE["BLACK"])
+        draw.text((text_x, stamp_y), updated, fill=INKY_PALETTE["BLACK"], font=stamp_font)
 
     weather_q = None if target.has_sd_card else 80
     return _encode_jpeg(img, target, quality=weather_q)

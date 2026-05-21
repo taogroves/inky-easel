@@ -2,7 +2,7 @@
 
 VSYS is exposed on ADC3 (GP29) via a 1/3 voltage divider. On Pico W, sampling
 VSYS requires WL_GPIO2 to be enabled so the wireless chip releases the line.
-We use a small moving median over several reads to reject noise.
+We average several median-filtered snapshots over time to reject short spikes.
 """
 
 import time
@@ -24,7 +24,7 @@ LOW_BATTERY_PCT = 20
 CRITICAL_BATTERY_PCT = 10
 
 
-def read_voltage(samples: int = 9) -> float:
+def _read_median_voltage(samples: int) -> float:
     readings = []
     for _ in range(samples):
         readings.append(_VSYS.read_u16())
@@ -32,6 +32,20 @@ def read_voltage(samples: int = 9) -> float:
     readings.sort()
     median = readings[len(readings) // 2]
     return median * _CONVERSION
+
+
+def read_voltage(samples: int = 9, rounds: int = 5, delay_ms: int = 200) -> float:
+    voltages = []
+    rounds = max(1, int(rounds))
+    for idx in range(rounds):
+        voltages.append(_read_median_voltage(samples))
+        if idx < rounds - 1 and delay_ms > 0:
+            time.sleep_ms(delay_ms)
+
+    voltages.sort()
+    if len(voltages) > 2:
+        voltages = voltages[1:-1]
+    return sum(voltages) / len(voltages)
 
 
 def voltage_to_percent(voltage: float) -> int:
