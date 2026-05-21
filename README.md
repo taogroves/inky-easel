@@ -37,9 +37,9 @@ self-hosted server.
 
 * **The webserver** stores each user's frame configuration, schedule, plugins,
   and inbox. It renders weather (Open-Meteo), the latest XKCD, RSS headlines,
-  Reddit subreddits,
-  static text cards, and inbox text/images into JPEGs at the frame's native
-  resolution. For custom plugins it just forwards the MicroPython source code.
+  Reddit subreddits, static text cards, and inbox text/images/links/drawings
+  into JPEGs at the frame's native resolution. For custom plugins it just
+  forwards the MicroPython source code.
 
 * **The portal** lets a user sign up, register one or more frames, configure
   their location and Wi-Fi, write the result directly to a microSD card

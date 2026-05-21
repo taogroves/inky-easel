@@ -109,7 +109,7 @@ export type Plugin = {
 
 export type InboxItem = {
   id: string;
-  kind: "text" | "image";
+  kind: "text" | "image" | "link" | "drawing";
   text_body: string | null;
   image_mime: string | null;
   sender_label: string | null;

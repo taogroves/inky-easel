@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from PIL import UnidentifiedImageError
@@ -10,7 +11,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_service_user
-from ..content.renderer import prepare_inbox_image, target_for
+from ..content.link_preview import LinkPreview, resolve_link_preview
+from ..content.renderer import prepare_inbox_image, render_link_preview, target_for
+from ..content.url_clean import clean_url_for_qr
 from ..db import get_session
 from ..models import Frame, InboxItem, User
 from ..schemas import InboxItemOut, InboxSend
@@ -69,13 +72,15 @@ async def send_inbox(
         kind=payload.kind,
     )
 
+    target = target_for(recipient.display_type)
+
     if payload.kind == "text":
         if not payload.text_body or not payload.text_body.strip():
             raise HTTPException(422, "text_body is required for text messages")
         item.text_body = payload.text_body
-    elif payload.kind == "image":
+    elif payload.kind in {"image", "drawing"}:
         if not payload.image_base64:
-            raise HTTPException(422, "image_base64 is required for image messages")
+            raise HTTPException(422, "image_base64 is required for image/drawing messages")
         try:
             data = base64.b64decode(payload.image_base64, validate=True)
         except Exception:
@@ -83,11 +88,31 @@ async def send_inbox(
         if len(data) > MAX_IMAGE_BYTES:
             raise HTTPException(413, f"Image too large (>{MAX_IMAGE_BYTES // 1024} KB)")
         try:
-            item.image_bytes = prepare_inbox_image(data, target_for(recipient.display_type))
+            item.image_bytes = prepare_inbox_image(data, target)
         except UnidentifiedImageError:
             raise HTTPException(422, "image_base64 is not a supported image")
         except Exception as e:
             raise HTTPException(422, f"Could not process image: {e}")
+        item.image_mime = "image/jpeg"
+    elif payload.kind == "link":
+        if not payload.text_body or not payload.text_body.strip():
+            raise HTTPException(422, "text_body is required for link messages")
+        try:
+            preview = await resolve_link_preview(payload.text_body.strip())
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+        except Exception:
+            cleaned = clean_url_for_qr(payload.text_body.strip())
+            parsed = urlparse(cleaned)
+            if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+                raise HTTPException(422, "Link must be an http(s) URL")
+            preview = LinkPreview(
+                url=cleaned,
+                final_url=cleaned,
+                domain=parsed.netloc[4:] if parsed.netloc.startswith("www.") else parsed.netloc,
+            )
+        item.text_body = preview.final_url
+        item.image_bytes = render_link_preview(target, preview)
         item.image_mime = "image/jpeg"
     else:  # pragma: no cover - pydantic enforces this
         raise HTTPException(422, "Unknown kind")

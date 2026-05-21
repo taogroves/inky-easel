@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 
+import DrawingPad from "@/components/DrawingPad";
 import { sendMessageAction } from "@/lib/actions";
 
 async function fileToBase64(file: File): Promise<string> {
@@ -14,9 +15,11 @@ async function fileToBase64(file: File): Promise<string> {
 
 export default function SendForm() {
   const [recipient, setRecipient] = useState("");
-  const [kind, setKind] = useState<"text" | "image">("text");
+  const [kind, setKind] = useState<"text" | "image" | "link" | "drawing">("text");
   const [text, setText] = useState("");
+  const [link, setLink] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [drawingBase64, setDrawingBase64] = useState("");
   const [senderLabel, setSenderLabel] = useState("");
   const [inboxPassword, setInboxPassword] = useState("");
   const [pending, startTransition] = useTransition();
@@ -36,6 +39,15 @@ export default function SendForm() {
       };
       if (kind === "text") {
         payload.text_body = text;
+      } else if (kind === "link") {
+        payload.text_body = link;
+      } else if (kind === "drawing") {
+        if (!drawingBase64) {
+          setError("Draw something first.");
+          return;
+        }
+        payload.image_base64 = drawingBase64;
+        payload.image_mime = "image/png";
       } else if (file) {
         payload.image_base64 = await fileToBase64(file);
         payload.image_mime = file.type || "image/jpeg";
@@ -50,7 +62,9 @@ export default function SendForm() {
       }
       setMessage("Sent!");
       setText("");
+      setLink("");
       setFile(null);
+      setDrawingBase64("");
       setInboxPassword("");
     });
   }
@@ -82,13 +96,37 @@ export default function SendForm() {
         <label className="inline-flex items-center gap-2">
           <input type="radio" name="kind" checked={kind === "image"} onChange={() => setKind("image")} /> Image
         </label>
+        <label className="inline-flex items-center gap-2">
+          <input type="radio" name="kind" checked={kind === "link"} onChange={() => setKind("link")} /> Link
+        </label>
+        <label className="inline-flex items-center gap-2">
+          <input type="radio" name="kind" checked={kind === "drawing"} onChange={() => setKind("drawing")} /> Drawing
+        </label>
       </div>
-      {kind === "text" ? (
+      {kind === "text" && (
         <div>
           <label className="label" htmlFor="text">Message</label>
           <textarea id="text" className="input min-h-[120px]" required value={text} onChange={(e) => setText(e.target.value)} />
         </div>
-      ) : (
+      )}
+      {kind === "link" && (
+        <div>
+          <label className="label" htmlFor="link">Link</label>
+          <input
+            id="link"
+            type="url"
+            className="input"
+            required
+            value={link}
+            onChange={(e) => setLink(e.target.value)}
+            placeholder="https://example.com/article-or-image"
+          />
+          <p className="mt-1 text-xs text-ink-soft">
+            We&apos;ll try to render an image, title/summary card, or a QR code fallback.
+          </p>
+        </div>
+      )}
+      {kind === "image" && (
         <div>
           <label className="label" htmlFor="image">Image (jpg/png up to 5 MB)</label>
           <input
@@ -99,6 +137,12 @@ export default function SendForm() {
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           />
           {file && <p className="mt-1 text-xs text-ink-soft">Selected: {file.name} ({Math.round(file.size / 1024)} KB). It will be resized for the recipient frame.</p>}
+        </div>
+      )}
+      {kind === "drawing" && (
+        <div>
+          <label className="label">Drawing</label>
+          <DrawingPad onImageChange={setDrawingBase64} />
         </div>
       )}
       {error && <p className="text-sm text-red-700">{error}</p>}

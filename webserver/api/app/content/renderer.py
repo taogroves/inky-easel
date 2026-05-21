@@ -14,13 +14,14 @@ import math
 import textwrap
 from dataclasses import dataclass
 from datetime import datetime
-from collections.abc import Callable
 from typing import Iterable
+from collections.abc import Callable
 
 import qrcode
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from .bitmap_font import draw_text, measure_text
+from .link_preview import LinkPreview
 from .reddit import REDDIT_ORANGE
 from .url_clean import clean_url_for_qr
 
@@ -641,6 +642,110 @@ def _draw_qr_code(img: Image.Image, ox: int, oy: int, size: int, payload: str) -
         for x in range(size):
             dst[x, y] = black if src[x, y] == 0 else white
     img.paste(qr_rgb, (ox, oy))
+
+
+def _draw_qr_badge(img: Image.Image, x: int, y: int, size: int, payload: str) -> None:
+    draw = ImageDraw.Draw(img)
+    pad = max(6, size // 14)
+    draw.rectangle(
+        (x - pad, y - pad, x + size + pad, y + size + pad),
+        fill=INKY_PALETTE["WHITE"],
+        outline=INKY_PALETTE["BLACK"],
+        width=2,
+    )
+    _draw_qr_code(img, x, y, size, payload)
+
+
+def render_fullscreen_qr(target: RenderTarget, url: str, title: str = "Open link") -> bytes:
+    img, draw = _new_canvas(target)
+    clean = clean_url_for_qr(url)
+    margin = max(18, target.width // 40)
+    title_font = _load_font(max(26, target.height // 16), bold=True)
+    small_font = _load_font(max(14, target.height // 32))
+    draw.rectangle((0, 0, target.width, max(56, target.height // 8)), fill=INKY_PALETTE["BLACK"])
+    draw.text((margin, margin), title, fill=INKY_PALETTE["WHITE"], font=title_font)
+
+    qr_size = min(target.width - margin * 2, target.height - max(110, target.height // 4))
+    qr_size = max(120, qr_size)
+    qr_x = (target.width - qr_size) // 2
+    qr_y = max(70, (target.height - qr_size) // 2)
+    _draw_qr_code(img, qr_x, qr_y, qr_size, clean)
+
+    lines = _wrap(draw, clean, small_font, target.width - margin * 2)[:2]
+    y = min(target.height - margin - len(lines) * 20, qr_y + qr_size + margin)
+    for line in lines:
+        draw.text((margin, y), line, fill=INKY_PALETTE["BLACK"], font=small_font)
+        y += 20
+    return _to_jpeg(img)
+
+
+def render_link_preview(target: RenderTarget, preview: LinkPreview) -> bytes:
+    if preview.is_direct_image and preview.image_bytes:
+        img = fit_image_to_target(preview.image_bytes, target)
+        qr_size = max(84, min(target.width, target.height) // 5)
+        _draw_qr_badge(img, target.width - qr_size - 20, target.height - qr_size - 20, qr_size, preview.final_url)
+        return _to_jpeg(img)
+
+    if not preview.title and not preview.description and not preview.image_bytes:
+        return render_fullscreen_qr(target, preview.final_url)
+
+    img, draw = _new_canvas(target)
+    margin = max(20, target.width // 36)
+    header_h = max(54, target.height // 9)
+    draw.rectangle((0, 0, target.width, header_h), fill=INKY_PALETTE["BLUE"])
+
+    domain_font = _load_font(max(20, target.height // 22), bold=True)
+    title_font = _load_font(max(30, target.height // 14), bold=True)
+    body_font = _load_font(max(18, target.height // 25))
+    small_font = _load_font(max(14, target.height // 34))
+
+    draw.text((margin, (header_h - domain_font.size) // 2), preview.domain, fill=INKY_PALETTE["WHITE"], font=domain_font)
+
+    qr_size = max(84, min(target.width, target.height) // 5)
+    qr_x = target.width - qr_size - margin
+    qr_y = target.height - qr_size - margin
+
+    content_x = margin
+    content_w = target.width - margin * 2
+    y = header_h + margin
+
+    if preview.image_bytes:
+        try:
+            thumb = Image.open(io.BytesIO(preview.image_bytes))
+            thumb = ImageOps.exif_transpose(thumb).convert("RGB")
+            thumb_w = min(target.width // 3, 240)
+            thumb_h = min(target.height // 3, 160)
+            thumb.thumbnail((thumb_w, thumb_h), Image.LANCZOS)
+            tx = target.width - margin - thumb.width
+            ty = header_h + margin
+            draw.rectangle((tx - 4, ty - 4, tx + thumb.width + 4, ty + thumb.height + 4), outline=INKY_PALETTE["BLACK"], width=2)
+            img.paste(thumb, (tx, ty))
+            content_w = tx - margin * 2
+        except Exception:
+            pass
+
+    title = preview.title or "Open link"
+    for line in _wrap(draw, title, title_font, content_w)[:3]:
+        draw.text((content_x, y), line, fill=INKY_PALETTE["BLACK"], font=title_font)
+        y += title_font.size + 6
+
+    if preview.description:
+        y += 8
+        available_h = max(70, qr_y - y - margin)
+        max_lines = max(2, available_h // (body_font.size + 7))
+        for line in _wrap(draw, preview.description, body_font, target.width - margin * 2)[:max_lines]:
+            draw.text((margin, y), line, fill=INKY_PALETTE["BLUE"], font=body_font)
+            y += body_font.size + 7
+
+    draw.line((margin, qr_y - 14, target.width - margin, qr_y - 14), fill=INKY_PALETTE["BLACK"], width=1)
+    _draw_qr_badge(img, qr_x, qr_y, qr_size, preview.final_url)
+    url_lines = _wrap(draw, preview.final_url, small_font, max(120, qr_x - margin * 2))[:3]
+    uy = qr_y + 6
+    for line in url_lines:
+        draw.text((margin, uy), line, fill=INKY_PALETTE["BLACK"], font=small_font)
+        uy += small_font.size + 4
+
+    return _to_jpeg(img)
 
 
 def _magazine_layout_scale(target: RenderTarget) -> tuple[float, float]:

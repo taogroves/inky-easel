@@ -164,7 +164,7 @@ export async function deleteInboxAction(frameId: string, itemId: string): Promis
 
 export async function sendMessageAction(payload: {
   recipient_frame_name: string;
-  kind: "text" | "image";
+  kind: "text" | "image" | "link" | "drawing";
   text_body?: string;
   image_base64?: string;
   image_mime?: string;

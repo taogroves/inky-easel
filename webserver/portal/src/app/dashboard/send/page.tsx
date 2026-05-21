@@ -4,7 +4,7 @@ import SendForm from "@/components/SendForm";
 
 export default function SendPage() {
   return (
-    <div className="mx-auto max-w-xl">
+    <div className="mx-auto max-w-4xl">
       <Link href="/dashboard" className="text-xs uppercase tracking-wide text-ink-soft hover:underline">
         &larr; Back to dashboard
       </Link>

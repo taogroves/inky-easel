@@ -114,7 +114,10 @@ async def _resolve_inbox(
         )
         return jpeg, {"kind": "empty"}
 
-    if item.kind == "image" and item.image_bytes:
+    if item.kind == "link" and item.image_bytes:
+        # Link cards already reserve their bottom-right corner for a QR code.
+        jpeg = render_inbox_image(target, item.image_bytes, None)
+    elif item.kind in {"image", "drawing"} and item.image_bytes:
         jpeg = render_inbox_image(target, item.image_bytes, item.sender_label)
     else:
         jpeg = render_inbox_text(

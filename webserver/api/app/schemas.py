@@ -148,7 +148,7 @@ class PluginOut(PluginIn):
 
 class InboxSend(ApiModel):
     recipient_frame_name: str
-    kind: Literal["text", "image"]
+    kind: Literal["text", "image", "link", "drawing"]
     text_body: Optional[str] = None
     image_base64: Optional[str] = None
     image_mime: Optional[str] = None

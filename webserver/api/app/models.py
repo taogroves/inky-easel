@@ -204,7 +204,7 @@ class InboxItem(Base):
     )
     sender_user_id: Mapped[Optional[str]] = mapped_column(String(64), ForeignKey("user.id", ondelete="SET NULL"))
     sender_label: Mapped[Optional[str]] = mapped_column(String(120))
-    kind: Mapped[str] = mapped_column(String(16))  # "text" | "image"
+    kind: Mapped[str] = mapped_column(String(16))  # text|image|link|drawing
     text_body: Mapped[Optional[str]] = mapped_column(Text)
     image_mime: Mapped[Optional[str]] = mapped_column(String(64))
     image_bytes: Mapped[Optional[bytes]] = mapped_column(LONGBLOB)

@@ -56,6 +56,13 @@ export default function InboxList({
   const activeItems = items.filter((item) => !item.archived);
   const archivedItems = items.filter((item) => item.archived);
 
+  function itemTitle(item: InboxItem) {
+    if (item.kind === "image") return "Image";
+    if (item.kind === "drawing") return "Drawing";
+    if (item.kind === "link") return item.text_body ? `Link: ${item.text_body.slice(0, 80)}` : "Link";
+    return item.text_body ? item.text_body.slice(0, 80) : "(empty)";
+  }
+
   function renderItem(item: InboxItem) {
     return (
       <article key={item.id} className={`card ${item.archived ? "opacity-60" : ""}`}>
@@ -68,7 +75,7 @@ export default function InboxList({
               {item.archived && <span className="ml-2 inline-block rounded bg-ink/10 px-1.5 text-[10px]">archived</span>}
             </div>
             <h2 className="font-display text-lg">
-              {item.kind === "image" ? "Image" : item.text_body ? item.text_body.slice(0, 80) : "(empty)"}
+              {itemTitle(item)}
             </h2>
           </div>
           <div className="flex gap-2">
