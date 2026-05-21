@@ -706,27 +706,35 @@ def render_link_preview(target: RenderTarget, preview: LinkPreview) -> bytes:
     qr_x = target.width - qr_size - margin
     qr_y = target.height - qr_size - margin
 
+    has_image = bool(preview.image_bytes)
+    image_col_x = int(target.width * 2 / 3)
+    image_col_w = target.width - image_col_x - margin
     content_x = margin
-    content_w = target.width - margin * 2
+    content_w = (image_col_x - margin * 2) if has_image else (target.width - margin * 2)
     y = header_h + margin
 
-    if preview.image_bytes:
+    if has_image:
         try:
             thumb = Image.open(io.BytesIO(preview.image_bytes))
             thumb = ImageOps.exif_transpose(thumb).convert("RGB")
-            thumb_w = min(target.width // 3, 240)
-            thumb_h = min(target.height // 3, 160)
+            thumb_w = max(80, image_col_w - margin // 2)
+            thumb_h = max(80, qr_y - header_h - margin * 3)
             thumb.thumbnail((thumb_w, thumb_h), Image.LANCZOS)
-            tx = target.width - margin - thumb.width
-            ty = header_h + margin
+            tx = image_col_x + (image_col_w - thumb.width) // 2
+            ty = header_h + (qr_y - header_h - thumb.height) // 2
             draw.rectangle((tx - 4, ty - 4, tx + thumb.width + 4, ty + thumb.height + 4), outline=INKY_PALETTE["BLACK"], width=2)
             img.paste(thumb, (tx, ty))
-            content_w = tx - margin * 2
         except Exception:
+            content_w = target.width - margin * 2
             pass
 
     title = preview.title or "Open link"
-    for line in _wrap(draw, title, title_font, content_w)[:3]:
+    max_title_lines = 3
+    min_title_size = max(22, target.height // 22)
+    while title_font.size > min_title_size and len(_wrap(draw, title, title_font, content_w)) > max_title_lines:
+        title_font = _load_font(title_font.size - 2, bold=True)
+    title_lines = _wrap(draw, title, title_font, content_w)[:max_title_lines]
+    for line in title_lines:
         draw.text((content_x, y), line, fill=INKY_PALETTE["BLACK"], font=title_font)
         y += title_font.size + 6
 
@@ -734,9 +742,15 @@ def render_link_preview(target: RenderTarget, preview: LinkPreview) -> bytes:
         y += 8
         available_h = max(70, qr_y - y - margin)
         max_lines = max(2, available_h // (body_font.size + 7))
-        for line in _wrap(draw, preview.description, body_font, target.width - margin * 2)[:max_lines]:
+        body_lines = _wrap(draw, preview.description, body_font, content_w)
+        min_body_size = max(14, target.height // 34)
+        while body_font.size > min_body_size and len(body_lines) > max_lines:
+            body_font = _load_font(body_font.size - 1)
+            max_lines = max(2, available_h // (body_font.size + 6))
+            body_lines = _wrap(draw, preview.description, body_font, content_w)
+        for line in body_lines[:max_lines]:
             draw.text((margin, y), line, fill=INKY_PALETTE["BLUE"], font=body_font)
-            y += body_font.size + 7
+            y += body_font.size + 6
 
     draw.line((margin, qr_y - 14, target.width - margin, qr_y - 14), fill=INKY_PALETTE["BLACK"], width=1)
     _draw_qr_badge(img, qr_x, qr_y, qr_size, preview.final_url)

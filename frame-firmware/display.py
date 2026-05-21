@@ -18,8 +18,8 @@ def clear(graphics, color=WHITE):
     graphics.clear()
 
 
-def draw_battery_overlay(graphics, width, percent, charging=False):
-    """Compact battery icon in top-right with percent and charging state."""
+def draw_battery_overlay(graphics, width, percent):
+    """Compact battery icon in top-right with percent inside."""
     body_w = 82
     body_h = 28
     tip_w = 6
@@ -41,41 +41,14 @@ def draw_battery_overlay(graphics, width, percent, charging=False):
 
     graphics.set_pen(BLACK)
     label = "{}%".format(percent)
-    label_scale = 2
-    if charging and len(label) > 3:
-        label_scale = 1
     graphics.set_font("bitmap8")
-    label_w = graphics.measure_text(label, label_scale)
-    if charging:
-        _draw_lightning_bolt(graphics, x + 8, y + 5)
-        text_x = x + 28 + max(0, (body_w - 30 - label_w) // 2)
-        text_y = y + 6 if label_scale == 2 else y + 10
-    else:
-        text_x = x + max(0, (body_w - label_w) // 2)
-        text_y = y + 6
-    graphics.text(label, text_x, text_y, body_w - 4, label_scale)
+    label_w = graphics.measure_text(label, 2)
+    text_x = x + max(0, (body_w - label_w) // 2)
+    graphics.text(label, text_x, y + 6, body_w - 4, 2)
 
 
 def draw_low_battery_overlay(graphics, width, percent):
-    draw_battery_overlay(graphics, width, percent, charging=False)
-
-
-def _draw_lightning_bolt(graphics, x, y):
-    pixel = 2
-    rows = (
-        "....XX",
-        "...XX.",
-        "..XX..",
-        ".XXXXX",
-        "...XX.",
-        "..XX..",
-        ".XX...",
-        "XX....",
-    )
-    for row, cells in enumerate(rows):
-        for col, cell in enumerate(cells):
-            if cell == "X":
-                graphics.rectangle(x + col * pixel, y + row * pixel, pixel, pixel)
+    draw_battery_overlay(graphics, width, percent)
 
 
 def draw_critical_battery_screen(graphics, width, height):
