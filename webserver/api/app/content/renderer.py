@@ -295,6 +295,43 @@ def _draw_weather_icon(draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, i
             )
 
 
+def _format_updated_at(iso_value: str | None, timezone: str | None) -> str | None:
+    if not iso_value:
+        return None
+    try:
+        when = datetime.fromisoformat(iso_value.replace("Z", "+00:00"))
+        if timezone and timezone != "auto":
+            from zoneinfo import ZoneInfo
+
+            when = when.astimezone(ZoneInfo(timezone))
+        return when.strftime("%H:%M")
+    except ValueError:
+        if "T" in iso_value:
+            return iso_value.split("T", 1)[1][:5]
+        return None
+
+
+def _graph_plot_box(x: int, y: int, width: int, height: int, *, precip: bool = False) -> tuple[int, int, int, int]:
+    left = 44
+    top = 22 if not precip else 22
+    return x + left, y + top, width - 52, height - (30 if not precip else 30)
+
+
+def _draw_now_marker(
+    draw: ImageDraw.ImageDraw,
+    plot_x: int,
+    plot_y: int,
+    plot_w: int,
+    plot_h: int,
+    n: int,
+    now_index: int | None,
+) -> None:
+    if now_index is None or n < 2:
+        return
+    nx = plot_x + int(now_index * plot_w / max(1, n - 1))
+    draw.line((nx, plot_y, nx, plot_y + plot_h), fill=(150, 155, 165), width=1)
+
+
 def _series_values(points: Iterable[dict], key: str) -> list[float]:
     out: list[float] = []
     for point in points:
@@ -317,14 +354,12 @@ def _draw_series_graph(
     y_min: float | None = None,
     y_max: float | None = None,
     label: str,
-    value_fmt,
+    value_fmt: Callable[[float], str],
+    now_index: int | None = None,
 ) -> None:
     if not values:
         return
-    plot_x = x + 44
-    plot_y = y + 22
-    plot_w = width - 52
-    plot_h = height - 30
+    plot_x, plot_y, plot_w, plot_h = _graph_plot_box(x, y, width, height)
     lo = y_min if y_min is not None else min(values)
     hi = y_max if y_max is not None else max(values)
     if hi == lo:
@@ -352,6 +387,7 @@ def _draw_series_graph(
         draw.line(coords, fill=color, width=3)
     elif coords:
         draw.ellipse((coords[0][0] - 4, coords[0][1] - 4, coords[0][0] + 4, coords[0][1] + 4), fill=color)
+    _draw_now_marker(draw, plot_x, plot_y, plot_w, plot_h, n, now_index)
 
 
 def _draw_precip_graph(
@@ -363,14 +399,11 @@ def _draw_precip_graph(
     values: list[float],
     *,
     color,
+    now_index: int | None = None,
 ) -> None:
     if not values:
         return
-    pad_top = 22
-    plot_x = x + 44
-    plot_y = y + pad_top
-    plot_w = width - 52
-    plot_h = height - pad_top - 8
+    plot_x, plot_y, plot_w, plot_h = _graph_plot_box(x, y, width, height, precip=True)
     draw.rectangle((x, y, x + width, y + height), outline=INKY_PALETTE["BLACK"], width=1)
     label_font = _load_font(14, bold=True)
     draw.text((x + 8, y + 4), "Rain %", fill=INKY_PALETTE["BLACK"], font=label_font)
@@ -381,10 +414,60 @@ def _draw_precip_graph(
         bh = int((max(0.0, min(100.0, val)) / 100.0) * plot_h)
         by = plot_y + plot_h - bh
         draw.rectangle((bx, by, bx + bar_w, plot_y + plot_h), fill=color)
+    _draw_now_marker(draw, plot_x, plot_y, plot_w, plot_h, n, now_index)
 
 
-def _draw_moon_phase(
-    draw: ImageDraw.ImageDraw,
+def _moon_phase_angle(illumination: float | None, waxing: bool) -> float:
+    """Map illuminated fraction to terminator angle (radians, 0=new … 2π)."""
+    frac = max(0.0, min(1.0, (illumination if illumination is not None else 50.0) / 100.0))
+    if frac >= 0.999:
+        return math.pi
+    if frac <= 0.001:
+        return 0.0
+    phase = math.acos(1.0 - 2.0 * frac)
+    return phase if waxing else (2.0 * math.pi - phase)
+
+
+def _render_moon_phase_image(size: int, illumination: float | None, *, waxing: bool = True) -> Image.Image:
+    """Terminator + 2° soft edge per celestialprogramming.com/moonPhaseRender."""
+    diameter = max(16, size)
+    r = diameter / 2.0
+    dark = (48, 52, 68)
+    light = (232, 236, 244)
+    limb = (90, 95, 110)
+    moon = Image.new("RGBA", (diameter, diameter), (0, 0, 0, 0))
+    pixels = moon.load()
+    theta = _moon_phase_angle(illumination, waxing)
+    terminator_x = r * math.cos(theta)
+    grad = r * math.radians(2.0)
+
+    for py in range(diameter):
+        for px in range(diameter):
+            dx = px - r + 0.5
+            dy = py - r + 0.5
+            dist_sq = dx * dx + dy * dy
+            if dist_sq > r * r:
+                continue
+            if waxing:
+                edge_dist = dx - terminator_x
+            else:
+                edge_dist = terminator_x - dx
+            if edge_dist >= grad:
+                t = 1.0
+            elif edge_dist <= -grad:
+                t = 0.0
+            else:
+                t = 0.5 + edge_dist / (2.0 * grad)
+            shade = tuple(int(dark[i] + t * (light[i] - dark[i])) for i in range(3))
+            pixels[px, py] = shade + (255,)
+
+    draw = ImageDraw.Draw(moon)
+    draw.ellipse((0, 0, diameter - 1, diameter - 1), outline=limb, width=max(1, diameter // 32))
+    return moon.convert("RGB")
+
+
+def _paste_moon_phase(
+    img: Image.Image,
     cx: int,
     cy: int,
     size: int,
@@ -392,22 +475,10 @@ def _draw_moon_phase(
     *,
     waxing: bool = True,
 ) -> None:
-    r = max(8, size // 2)
-    bbox = (cx - r, cy - r, cx + r, cy + r)
-    shadow = (100, 105, 120)
-    lit = (245, 247, 255)
-    draw.ellipse(bbox, fill=(175, 180, 195), outline=shadow, width=2)
-    pct = 50.0 if illumination is None else illumination
-    if pct >= 99:
-        draw.ellipse(bbox, fill=lit, outline=shadow, width=2)
-        return
-    if pct <= 1:
-        return
-    span = int(min(360, pct * 3.6))
-    if waxing:
-        draw.pieslice(bbox, 270 - span // 2, 270 + span // 2, fill=lit)
-    else:
-        draw.pieslice(bbox, 90 - span // 2, 90 + span // 2, fill=lit)
+    moon = _render_moon_phase_image(size, illumination, waxing=waxing)
+    ox = cx - moon.width // 2
+    oy = cy - moon.height // 2
+    img.paste(moon, (ox, oy))
 
 
 def render_weather(target: RenderTarget, payload: dict) -> bytes:
@@ -455,28 +526,21 @@ def render_weather(target: RenderTarget, payload: dict) -> bytes:
     )
 
     moon = payload.get("moon") or {}
-    moon_size = int(min(hero_h * 0.45, 72 * scale))
+    moon_size = int(min(hero_h * 0.5, 80 * scale))
     moon_cx = target.width - margin - moon_size // 2
-    moon_cy = int(hero_h * 0.42)
-    _draw_moon_phase(
-        draw,
-        moon_cx,
-        moon_cy,
-        moon_size,
-        moon.get("illumination"),
-        waxing=moon.get("waxing", True),
-    )
-    moon_font = _load_font(int(14 * scale))
-    moon_label = moon.get("phase") or "Moon"
-    illum = moon.get("illumination")
-    moon_detail = f"{int(round(illum))}% lit" if illum is not None else ""
-    draw.text((moon_cx - moon_size, moon_cy + moon_size // 2 + 4), moon_label,
-              fill=INKY_PALETTE["BLACK"], font=moon_font)
-    if moon_detail:
-        draw.text((moon_cx - moon_size, moon_cy + moon_size // 2 + int(20 * scale)), moon_detail,
-                  fill=secondary, font=_load_font(int(12 * scale)))
+    moon_cy = int(hero_h * 0.4)
+    if moon:
+        _paste_moon_phase(
+            img,
+            moon_cx,
+            moon_cy,
+            moon_size,
+            moon.get("illumination"),
+            waxing=moon.get("waxing", True),
+        )
 
     graph_y = hero_h + graph_gap
+    now_index = payload.get("current_hour_index")
     temps = _series_values(hourly, "temperature")
     precips = _series_values(hourly, "precip_prob")
     winds = _series_values(hourly, "wind_speed")
@@ -488,14 +552,14 @@ def render_weather(target: RenderTarget, payload: dict) -> bytes:
         (temps, {"color": accent, "fill": tint, "label": "Temp", "value_fmt": temp_fmt, "kind": "line"}),
         (precips, {"color": secondary, "label": "Rain %", "kind": "precip"}),
         (winds, {"color": accent, "label": f"Wind ({wind_unit})", "value_fmt": lambda v: str(int(round(v))), "kind": "line"}),
-        (uv_values, {"color": INKY_PALETTE["ORANGE"], "label": "UV index", "value_fmt": lambda v: f"{v:.0f}", "kind": "line", "y_min": 0, "y_max": 12}),
+        (uv_values, {"color": accent, "fill": tint, "label": "UV index", "value_fmt": lambda v: f"{v:.0f}", "kind": "line", "y_min": 0, "y_max": 12}),
     ]
     for idx, (values, opts) in enumerate(graphs):
         row, col = divmod(idx, graph_cols)
         gx = margin + col * (graph_w + margin)
         gy = graph_y + row * (graph_h + graph_gap)
         if opts["kind"] == "precip":
-            _draw_precip_graph(draw, gx, gy, graph_w, graph_h, values, color=opts["color"])
+            _draw_precip_graph(draw, gx, gy, graph_w, graph_h, values, color=opts["color"], now_index=now_index)
         else:
             _draw_series_graph(
                 draw, gx, gy, graph_w, graph_h, values,
@@ -505,6 +569,7 @@ def render_weather(target: RenderTarget, payload: dict) -> bytes:
                 y_max=opts.get("y_max"),
                 label=opts["label"],
                 value_fmt=opts["value_fmt"],
+                now_index=now_index,
             )
 
     footer_y = target.height - footer_h
@@ -515,13 +580,9 @@ def render_weather(target: RenderTarget, payload: dict) -> bytes:
     wind_now = int(round(current.get("wind_speed", 0)))
     sunrise = payload.get("sunrise") or "--:--"
     sunset = payload.get("sunset") or "--:--"
-    moon_footer = moon_label
-    if illum is not None:
-        moon_footer = f"{moon_label} ({int(round(illum))}%)"
     cols = [
         ("Sunrise", sunrise),
         ("Sunset", sunset),
-        ("Moon", moon_footer),
         ("Wind now", f"{wind_now} {wind_unit}"),
     ]
     col_w = (target.width - margin * 2) // len(cols)
@@ -529,6 +590,19 @@ def render_weather(target: RenderTarget, payload: dict) -> bytes:
         cx = margin + i * col_w
         draw.text((cx, footer_y + int(10 * scale)), label, fill=secondary, font=detail_font)
         draw.text((cx, footer_y + int(32 * scale)), value, fill=INKY_PALETTE["BLACK"], font=footer_font)
+
+    updated = _format_updated_at(payload.get("updated_at"), payload.get("timezone"))
+    if updated:
+        stamp_font = _load_font(int(11 * scale))
+        stamp = f"Updated {updated}"
+        bbox = draw.textbbox((0, 0), stamp, font=stamp_font)
+        stamp_w = bbox[2] - bbox[0]
+        draw.text(
+            (target.width - margin - stamp_w, target.height - margin - (bbox[3] - bbox[1])),
+            stamp,
+            fill=(130, 135, 145),
+            font=stamp_font,
+        )
 
     return _to_jpeg(img)
 

@@ -210,6 +210,18 @@ async def fetch_weather(
     daily = data.get("daily", {}) or {}
     sunrise = _format_time((daily.get("sunrise") or [None])[0])
     sunset = _format_time((daily.get("sunset") or [None])[0])
+    updated_at = current_block.get("time")
+    now_hour = _local_date(timezone or data.get("timezone")).hour
+    current_hour_index = None
+    for i, point in enumerate(hourly):
+        try:
+            if datetime.fromisoformat(point["time"]).hour == now_hour:
+                current_hour_index = i
+                break
+        except (ValueError, TypeError, KeyError):
+            continue
+    if current_hour_index is None and hourly:
+        current_hour_index = min(now_hour, len(hourly) - 1)
 
     return {
         "current": current,
@@ -217,6 +229,8 @@ async def fetch_weather(
         "sunrise": sunrise,
         "sunset": sunset,
         "moon": moon,
+        "updated_at": updated_at,
+        "current_hour_index": current_hour_index,
         "units": unit,
         "wind_unit": "mph" if use_fahrenheit else "km/h",
         "timezone": data.get("timezone"),
