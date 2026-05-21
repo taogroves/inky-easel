@@ -34,6 +34,7 @@ class FramePollRequest(ApiModel):
     battery_voltage: float = 0.0
     battery_percent: int = 0
     wakeup: Literal["rtc", "button", "power"] = "rtc"
+    has_sd_card: Optional[bool] = None
 
 
 class TextPayload(ApiModel):

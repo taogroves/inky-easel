@@ -38,6 +38,7 @@ async def poll(
         session,
         frame,
         asset_base_url=(payload.server_url or str(request.base_url)).rstrip("/"),
+        has_sd_card=payload.has_sd_card,
     )
     response.low_battery_warning = payload.battery_percent < 20
     sleep_minutes = max(1, int(response.sleep_minutes or 1))

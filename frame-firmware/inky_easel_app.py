@@ -162,7 +162,7 @@ def _render_with_battery(graphics, width, height, response, percent):
 
 def _scheduled_refresh(graphics, width, height, server_url, frame_id,
                        frame_secret, default_sleep_minutes, voltage, percent,
-                       wakeup):
+                       wakeup, has_sd_card=False):
     if not _connect_wifi():
         _show_error(graphics, width, height, "Wi-Fi unavailable")
         return None, 1, False
@@ -170,7 +170,8 @@ def _scheduled_refresh(graphics, width, height, server_url, frame_id,
     try:
         ih.network_led(100)
         response = frame_client.poll(
-            server_url, frame_id, frame_secret, voltage, percent, wakeup
+            server_url, frame_id, frame_secret, voltage, percent, wakeup,
+            has_sd_card=has_sd_card,
         )
     except frame_client.PollError as e:
         ih.stop_network_led()
@@ -237,7 +238,7 @@ def main():
 
     response, sleep_minutes, ok = _scheduled_refresh(
         graphics, width, height, SERVER_URL, FRAME_ID, FRAME_SECRET,
-        DEFAULT_SLEEP_MINUTES, voltage, percent, wakeup
+        DEFAULT_SLEEP_MINUTES, voltage, percent, wakeup, has_sd_card=sd_ok,
     )
 
     if not ok:

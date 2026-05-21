@@ -5,7 +5,8 @@ Protocol (POST /api/frame/poll):
 
   request  = { "frame_id": str, "secret": str,
                "battery_voltage": float, "battery_percent": int,
-               "wakeup": "rtc"|"button"|"power" }
+               "wakeup": "rtc"|"button"|"power",
+               "has_sd_card": bool }
 
   response = { "type": "image"|"text"|"plugin"|"sleep",
                "image_url": str | null,
@@ -89,7 +90,7 @@ def _http_post_json(url, payload):
         raise PollError("Bad JSON: {} ({})".format(_preview(text), e))
 
 
-def poll(server_url, frame_id, secret, battery_voltage, battery_percent, wakeup):
+def poll(server_url, frame_id, secret, battery_voltage, battery_percent, wakeup, has_sd_card=False):
     url = server_url.rstrip("/") + "/api/frame/poll"
     payload = {
         "frame_id": frame_id,
@@ -98,6 +99,7 @@ def poll(server_url, frame_id, secret, battery_voltage, battery_percent, wakeup)
         "battery_voltage": round(battery_voltage, 3),
         "battery_percent": battery_percent,
         "wakeup": wakeup,
+        "has_sd_card": bool(has_sd_card),
     }
     try:
         return _http_post_json(url, payload)

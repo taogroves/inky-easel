@@ -47,11 +47,12 @@ DISPLAY_DIMENSIONS = {
 class RenderTarget:
     width: int
     height: int
+    has_sd_card: bool = False
 
 
-def target_for(display_type: str) -> RenderTarget:
+def target_for(display_type: str, *, has_sd_card: bool = False) -> RenderTarget:
     w, h = DISPLAY_DIMENSIONS.get(display_type, (800, 480))
-    return RenderTarget(w, h)
+    return RenderTarget(w, h, has_sd_card=has_sd_card)
 
 
 def _load_font(size: int, bold: bool = False) -> ImageFont.ImageFont:
@@ -94,9 +95,16 @@ def _wrap(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_w
     return lines
 
 
-def _to_jpeg(img: Image.Image) -> bytes:
+def _encode_jpeg(img: Image.Image, target: RenderTarget, *, quality: int | None = None) -> bytes:
+    """SD card: high quality 4:4:4. Internal flash: smaller files for tight RAM."""
+    if target.has_sd_card:
+        q = 95 if quality is None else quality
+        subsampling = 0
+    else:
+        q = quality if quality is not None else 85
+        subsampling = 2
     buf = io.BytesIO()
-    img.convert("RGB").save(buf, format="JPEG", quality=85, optimize=True)
+    img.convert("RGB").save(buf, format="JPEG", quality=q, subsampling=subsampling, optimize=True)
     return buf.getvalue()
 
 
@@ -126,7 +134,7 @@ def fit_image_to_target(image_bytes: bytes, target: RenderTarget) -> Image.Image
 
 
 def prepare_inbox_image(image_bytes: bytes, target: RenderTarget) -> bytes:
-    return _to_jpeg(fit_image_to_target(image_bytes, target))
+    return _encode_jpeg(fit_image_to_target(image_bytes, target), target)
 
 
 def render_title_body(target: RenderTarget, title: str, body: str, accent: str = "BLUE",
@@ -156,7 +164,7 @@ def render_title_body(target: RenderTarget, title: str, body: str, accent: str =
         fy = target.height - 30
         draw.text((fx, fy), footer, fill=INKY_PALETTE["BLACK"], font=footer_font)
 
-    return _to_jpeg(img)
+    return _encode_jpeg(img, target)
 
 
 def render_inbox_text(target: RenderTarget, sender: str, text: str, when: datetime) -> bytes:
@@ -186,7 +194,7 @@ def render_inbox_image(target: RenderTarget, image_bytes: bytes, sender: str | N
                        fill=INKY_PALETTE["WHITE"], outline=INKY_PALETTE["BLACK"])
         draw.text((bx + pad, by + pad), label, fill=INKY_PALETTE["BLACK"], font=footer_font)
 
-    return _to_jpeg(img)
+    return _encode_jpeg(img, target)
 
 
 def render_xkcd(target: RenderTarget, image_bytes: bytes, title: str, alt: str | None) -> bytes:
@@ -213,7 +221,7 @@ def render_xkcd(target: RenderTarget, image_bytes: bytes, title: str, alt: str |
             draw.text((20, ay), line, fill=INKY_PALETTE["BLACK"], font=alt_font)
             ay += 18
 
-    return _to_jpeg(img)
+    return _encode_jpeg(img, target)
 
 
 def _weather_theme(code: int) -> dict:
@@ -606,7 +614,8 @@ def render_weather(target: RenderTarget, payload: dict) -> bytes:
             font=stamp_font,
         )
 
-    return _to_jpeg(img)
+    weather_q = None if target.has_sd_card else 80
+    return _encode_jpeg(img, target, quality=weather_q)
 
 
 def _draw_qr_code(img: Image.Image, ox: int, oy: int, size: int, payload: str) -> None:
@@ -677,7 +686,7 @@ def render_fullscreen_qr(target: RenderTarget, url: str, title: str = "Open link
     for line in lines:
         draw.text((margin, y), line, fill=INKY_PALETTE["BLACK"], font=small_font)
         y += 20
-    return _to_jpeg(img)
+    return _encode_jpeg(img, target)
 
 
 def render_link_preview(target: RenderTarget, preview: LinkPreview) -> bytes:
@@ -685,7 +694,7 @@ def render_link_preview(target: RenderTarget, preview: LinkPreview) -> bytes:
         img = fit_image_to_target(preview.image_bytes, target)
         qr_size = max(84, min(target.width, target.height) // 5)
         _draw_qr_badge(img, target.width - qr_size - 20, target.height - qr_size - 20, qr_size, preview.final_url)
-        return _to_jpeg(img)
+        return _encode_jpeg(img, target)
 
     if not preview.title and not preview.description and not preview.image_bytes:
         return render_fullscreen_qr(target, preview.final_url)
@@ -760,7 +769,7 @@ def render_link_preview(target: RenderTarget, preview: LinkPreview) -> bytes:
         draw.text((margin, uy), line, fill=INKY_PALETTE["BLACK"], font=small_font)
         uy += small_font.size + 4
 
-    return _to_jpeg(img)
+    return _encode_jpeg(img, target)
 
 
 def _magazine_layout_scale(target: RenderTarget) -> tuple[float, float]:
@@ -839,7 +848,7 @@ def _render_magazine_layout(
         draw.rectangle((0, mid - py(20), target.width, mid + py(20)), fill=header_color)
         draw_text(draw, px(5), mid - py(15), empty_title, black, max_width=target.width - px(10), scale=psize(2))
         draw_text(draw, px(5), mid + py(2), empty_hint, black, max_width=target.width - px(10), scale=psize(2))
-        return _to_jpeg(img)
+        return _encode_jpeg(img, target)
 
     draw.rectangle((0, 0, target.width, header_h), fill=header_color)
     if header_icon:
@@ -877,7 +886,7 @@ def _render_magazine_layout(
         _draw_qr_code(img, px(10), py(265), qr_size, second.get("guid") or second.get("link") or "")
 
     draw.rectangle((0, target.height - footer_h, target.width, target.height), fill=header_color)
-    return _to_jpeg(img)
+    return _encode_jpeg(img, target)
 
 
 def render_rss_magazine(target: RenderTarget, feed_title: str, items: list[dict]) -> bytes:

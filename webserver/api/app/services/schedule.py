@@ -244,7 +244,11 @@ def _calendar_item_for_now(frame: Frame, schedule: list[ScheduleItem]) -> tuple[
 
 
 async def resolve_next_for_frame(
-    session: AsyncSession, frame: Frame, asset_base_url: str | None = None
+    session: AsyncSession,
+    frame: Frame,
+    asset_base_url: str | None = None,
+    *,
+    has_sd_card: bool | None = None,
 ) -> FramePollResponse:
     state = (
         await session.execute(select(FrameState).where(FrameState.frame_id == frame.id))
@@ -278,7 +282,7 @@ async def resolve_next_for_frame(
         idx = state.current_index % len(schedule)
         item = schedule[idx]
         sleep_minutes = max(1, item.sleep_minutes)
-    target = target_for(frame.display_type)
+    target = target_for(frame.display_type, has_sd_card=bool(has_sd_card))
 
     response = FramePollResponse(
         type="text",
