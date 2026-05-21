@@ -64,6 +64,13 @@ export const apiServiceSecret = SERVICE_SECRET;
 
 // ---------- Types mirrored from FastAPI ----------
 
+export type ImageDelivery = {
+  storage: string;
+  format: string;
+  compression: string;
+  posterize_note: string | null;
+};
+
 export type Frame = {
   id: string;
   name: string;
@@ -83,6 +90,8 @@ export type Frame = {
   connection_status: "connected" | "disconnected" | "awaiting_first_check_in";
   last_battery_percent: number | null;
   last_battery_voltage: number | null;
+  last_has_sd_card: boolean | null;
+  image_delivery: ImageDelivery;
   created_at: string;
 };
 

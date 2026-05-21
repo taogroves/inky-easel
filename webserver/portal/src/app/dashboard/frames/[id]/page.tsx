@@ -52,7 +52,22 @@ export default async function FrameDetailPage(props: { params: Promise<{ id: str
             <div className="flex justify-between"><dt className="text-ink-soft">Inbox</dt><dd>{frame.inbox_mode}</dd></div>
             <div className="flex justify-between"><dt className="text-ink-soft">Location</dt><dd>{frame.latitude != null && frame.longitude != null ? `${frame.latitude.toFixed(2)}, ${frame.longitude.toFixed(2)}` : "—"}</dd></div>
             <div className="flex justify-between"><dt className="text-ink-soft">Timezone</dt><dd>{frame.timezone ?? "—"}</dd></div>
+            <div className="flex justify-between gap-4 border-t border-ink/10 pt-2">
+              <dt className="text-ink-soft">Storage</dt>
+              <dd className="text-right">{frame.image_delivery.storage}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-ink-soft">Image format</dt>
+              <dd className="text-right">{frame.image_delivery.format}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-ink-soft">Compression</dt>
+              <dd className="text-right">{frame.image_delivery.compression}</dd>
+            </div>
           </dl>
+          {frame.image_delivery.posterize_note ? (
+            <p className="mt-3 text-xs text-ink-soft">{frame.image_delivery.posterize_note}</p>
+          ) : null}
         </div>
 
         <div className="card">

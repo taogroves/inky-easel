@@ -12,6 +12,7 @@ from urllib.request import Request, urlopen
 import feedparser
 import httpx
 
+from .reddit import clean_reddit_blurb
 from .rss import _strip_html
 from .url_clean import clean_url_for_qr
 
@@ -206,7 +207,9 @@ async def _try_reddit_rss_preview(client: httpx.AsyncClient, url: str) -> LinkPr
                 break
 
     title = _strip_html(getattr(entry, "title", "") or "")
-    description = _strip_html(getattr(entry, "summary", "") or getattr(entry, "description", "") or "")
+    description = clean_reddit_blurb(
+        getattr(entry, "summary", "") or getattr(entry, "description", "") or ""
+    )
     link = clean_url_for_qr(getattr(entry, "link", "") or clean_original)
     if not title or _is_reddit_verification_title(title):
         return None
@@ -244,7 +247,7 @@ async def _try_reddit_preview(client: httpx.AsyncClient, url: str) -> LinkPrevie
         final_url=final_url,
         domain="reddit.com",
         title=post.get("title"),
-        description=(post.get("selftext") or post.get("subreddit_name_prefixed") or "").strip(),
+        description=clean_reddit_blurb(post.get("selftext") or ""),
     )
     image_url = post.get("url_overridden_by_dest")
     if not image_url:

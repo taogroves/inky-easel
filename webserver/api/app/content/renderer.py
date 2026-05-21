@@ -929,14 +929,71 @@ def render_rss_magazine(target: RenderTarget, feed_title: str, items: list[dict]
 
 
 def render_reddit_magazine(target: RenderTarget, label: str, items: list[dict]) -> bytes:
-    return _render_magazine_layout(
-        target,
-        items=items,
-        header_text=f"{label}:",
-        header_color=REDDIT_ORANGE,
-        title_color=REDDIT_ORANGE,
-        body_color=INKY_PALETTE["BLUE"],
-        header_icon=_draw_reddit_icon,
-        empty_title="Unable to load subreddit!",
-        empty_hint="Check the subreddit name in the portal.",
+    """Three-up Reddit layout: titles and QR codes only (no RSS blurbs)."""
+    posts = items[:3]
+    img, draw = _new_canvas(target)
+    sx, sy = _magazine_layout_scale(target)
+
+    def px(x: float) -> int:
+        return int(x * sx)
+
+    def py(y: float) -> int:
+        return int(y * sy)
+
+    def psize(s: float) -> int:
+        return max(1, int(s * min(sx, sy)))
+
+    black = INKY_PALETTE["BLACK"]
+    header_h = py(40)
+    footer_h = py(20)
+    margin = px(10)
+    icon_size = psize(34)
+    header_text_x = px(10) + icon_size + px(8)
+
+    if not posts:
+        mid = target.height // 2
+        draw.rectangle((0, mid - py(20), target.width, mid + py(20)), fill=REDDIT_ORANGE)
+        draw_text(draw, px(5), mid - py(15), "Unable to load subreddit!", black, max_width=target.width - px(10), scale=psize(2))
+        draw_text(draw, px(5), mid + py(2), "Check the subreddit name in the portal.", black, max_width=target.width - px(10), scale=psize(2))
+        return _finalize_image(img, target)
+
+    draw.rectangle((0, 0, target.width, header_h), fill=REDDIT_ORANGE)
+    _draw_reddit_icon(draw, px(6), py(4), icon_size)
+    draw_text(
+        draw,
+        header_text_x,
+        py(10),
+        f"{label}:",
+        black,
+        max_width=target.width - header_text_x - px(10),
+        scale=psize(3),
     )
+
+    content_top = header_h + py(8)
+    content_bottom = target.height - footer_h - py(8)
+    block_h = max(1, (content_bottom - content_top) // len(posts))
+    qr_size = max(psize(56), min(psize(80), block_h - py(16)))
+
+    for index, item in enumerate(posts):
+        y0 = content_top + index * block_h
+        qr_x = target.width - qr_size - margin
+        qr_y = y0 + (block_h - qr_size) // 2
+        title = item.get("title", "") or "Untitled"
+        title_max_w = qr_x - margin * 2
+        title_scale = psize(3) if measure_text(title) < title_max_w else psize(2)
+        draw_text(
+            draw,
+            margin,
+            y0 + py(6),
+            title,
+            REDDIT_ORANGE,
+            max_width=title_max_w,
+            scale=title_scale,
+        )
+        _draw_qr_code(img, qr_x, qr_y, qr_size, item.get("guid") or item.get("link") or "")
+
+        if index < len(posts) - 1:
+            draw.line((margin, y0 + block_h - 1, target.width - margin, y0 + block_h - 1), fill=black, width=1)
+
+    draw.rectangle((0, target.height - footer_h, target.width, target.height), fill=REDDIT_ORANGE)
+    return _finalize_image(img, target)

@@ -4,12 +4,25 @@ from __future__ import annotations
 
 import re
 
-from .rss import DEFAULT_LIMIT, _strip_html, fetch_feed_url
+from .rss import _strip_html, fetch_feed_url
 from .url_clean import pick_shortest_url
 
 REDDIT_ORANGE = (255, 69, 0)
 DEFAULT_SUBREDDIT = "news"
+REDDIT_LIMIT = 3
 FRONT_PAGE_ALIASES = frozenset({"", "front", "frontpage", "home", "popular"})
+
+_REDDIT_RSS_NOISE = re.compile(
+    r"submitted by\s+/u/\S+|\[\s*link\s*\]|\[\s*comments\s*\]|^/u/\S+$",
+    re.IGNORECASE,
+)
+
+
+def clean_reddit_blurb(text: str) -> str:
+    """Strip Reddit RSS boilerplate (author, [link], [comments])."""
+    cleaned = _strip_html(text or "")
+    cleaned = _REDDIT_RSS_NOISE.sub(" ", cleaned)
+    return " ".join(cleaned.split())
 
 
 def normalize_subreddit(name: str | None) -> str | None:
@@ -50,7 +63,7 @@ def display_label(subreddit: str | None) -> str:
 async def fetch_reddit(
     subreddit: str | None = None,
     *,
-    limit: int = DEFAULT_LIMIT,
+    limit: int = REDDIT_LIMIT,
 ) -> dict:
     sub = normalize_subreddit(subreddit if subreddit is not None else DEFAULT_SUBREDDIT)
     url = feed_url_for_subreddit(sub)
@@ -60,13 +73,9 @@ async def fetch_reddit(
     items: list[dict] = []
     for entry in payload.get("items", []):
         title = entry.get("title", "") or "Untitled"
-        desc = entry.get("description", "") or ""
-        author = entry.get("author", "") or ""
-        if not desc and author:
-            desc = author if author.startswith("/u/") else f"by {author}"
         items.append({
             "title": title,
-            "description": desc,
+            "description": "",
             "link": entry.get("link", ""),
             "guid": pick_shortest_url(entry.get("link", ""), entry.get("guid", "")),
         })

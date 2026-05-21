@@ -33,6 +33,8 @@ async def poll(
     frame.last_seen_at = now
     frame.last_battery_percent = payload.battery_percent
     frame.last_battery_voltage = payload.battery_voltage
+    if payload.has_sd_card is not None:
+        frame.last_has_sd_card = payload.has_sd_card
 
     response = await resolve_next_for_frame(
         session,

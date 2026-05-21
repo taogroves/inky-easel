@@ -5,7 +5,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field, field_serializer
+from pydantic import BaseModel, Field, computed_field, field_serializer
+
+from .services.image_delivery import ImageDeliveryOut, image_delivery_for_frame
 
 
 def _utc_json(value: datetime) -> str:
@@ -103,10 +105,16 @@ class FrameOut(ApiModel):
     connection_status: Literal["connected", "disconnected", "awaiting_first_check_in"]
     last_battery_percent: Optional[int]
     last_battery_voltage: Optional[float]
+    last_has_sd_card: Optional[bool] = None
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+    @computed_field
+    @property
+    def image_delivery(self) -> ImageDeliveryOut:
+        return image_delivery_for_frame(self.last_has_sd_card)
 
 
 class FrameSecretOut(FrameOut):
