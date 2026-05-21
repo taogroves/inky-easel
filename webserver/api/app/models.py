@@ -219,7 +219,7 @@ class InboxItem(Base):
 
 
 class ContentCache(Base):
-    """Cache for server-rendered JPEGs so frames can re-download a stable URL."""
+    """Cache for server-rendered images (PNG or JPEG) so frames can re-download a stable URL."""
 
     __tablename__ = "ie_content_cache"
 

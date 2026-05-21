@@ -127,14 +127,17 @@ def _render(graphics, width, height, response):
         url = response.get("image_url")
         if not url:
             raise RuntimeError("No image URL")
+        mime = response.get("image_mime") or "image/jpeg"
         ih.network_led(100)
         try:
-            content_path = frame_client.CONTENT_PATH
-            frame_client.download_jpeg(url, content_path)
+            on_sd = frame_client.CONTENT_PATH.startswith("/sd")
+            content_path = frame_client.content_path_for(mime, on_sd=on_sd)
+            frame_client.CONTENT_PATH = content_path
+            frame_client.download_image(url, content_path, mime=mime)
         finally:
             ih.stop_network_led()
         scene.clear(graphics)
-        frame_client.render_image(graphics, content_path)
+        frame_client.render_image(graphics, content_path, mime=mime)
     elif kind == "text":
         payload = response.get("text") or {}
         accent_name = (payload.get("accent") or "BLUE").upper()

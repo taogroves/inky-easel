@@ -10,6 +10,7 @@ Protocol (POST /api/frame/poll):
 
   response = { "type": "image"|"text"|"plugin"|"sleep",
                "image_url": str | null,
+               "image_mime": str | null,
                "text": { "title": str, "body": str, "accent": str } | null,
                "plugin": { "code": str, "context": dict } | null,
                "sleep_minutes": int,
@@ -32,6 +33,13 @@ except ImportError:
 
 CONTENT_PATH = "/sd/_content.jpg"
 PLUGIN_PATH = "/sd/_plugin.py"
+
+
+def content_path_for(mime=None, *, on_sd=True):
+    base = "/sd/_content" if on_sd else "/_content"
+    if mime == "image/png":
+        return base + ".png"
+    return base + ".jpg"
 HTTP_TIMEOUT_SECONDS = 20
 
 
@@ -109,7 +117,7 @@ def poll(server_url, frame_id, secret, battery_voltage, battery_percent, wakeup,
         raise PollError(str(e))
 
 
-def download_jpeg(url, dest=None):
+def download_image(url, dest=None, mime=None):
     if dest is None:
         dest = _content_path()
     print("GET", url)
@@ -136,9 +144,22 @@ def download_jpeg(url, dest=None):
         gc.collect()
 
 
-def render_image(graphics, path=None):
+def download_jpeg(url, dest=None, mime=None):
+    """Backward-compatible alias for download_image."""
+    return download_image(url, dest=dest, mime=mime)
+
+
+def render_image(graphics, path=None, mime=None):
     if path is None:
         path = _content_path()
+    use_png = mime == "image/png" or str(path).lower().endswith(".png")
+    if use_png:
+        from pngdec import PNG
+
+        png = PNG(graphics)
+        png.open_file(path)
+        png.decode(0, 0)
+        return
     import jpegdec
 
     jpeg = jpegdec.JPEG(graphics)

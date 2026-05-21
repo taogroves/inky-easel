@@ -51,6 +51,7 @@ class PluginPayload(ApiModel):
 class FramePollResponse(ApiModel):
     type: Literal["image", "text", "plugin", "sleep"] = "sleep"
     image_url: Optional[str] = None
+    image_mime: Optional[str] = None
     text: Optional[TextPayload] = None
     plugin: Optional[PluginPayload] = None
     sleep_minutes: int = 60

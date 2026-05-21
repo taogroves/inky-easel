@@ -24,6 +24,7 @@ from ..config import get_settings
 from ..content import reddit, rss, weather, xkcd
 from ..content.renderer import (
     RenderTarget,
+    image_mime_for_target,
     render_inbox_image,
     render_inbox_text,
     render_reddit_magazine,
@@ -51,11 +52,11 @@ class ResolvedItem:
     response: FramePollResponse
 
 
-async def _cache_jpeg(session: AsyncSession, payload: bytes) -> str:
+async def _cache_image(session: AsyncSession, payload: bytes, mime: str) -> str:
     settings = get_settings()
     token = _secrets.token_urlsafe(24)
     expires = datetime.utcnow() + timedelta(minutes=settings.content_cache_minutes)
-    entry = ContentCache(token=token, mime="image/jpeg", payload=payload, expires_at=expires)
+    entry = ContentCache(token=token, mime=mime, payload=payload, expires_at=expires)
     session.add(entry)
     await session.flush()
     return token
@@ -71,6 +72,21 @@ def _image_url(token: str, base_url: str | None = None) -> str:
     settings = get_settings()
     public_base_url = (base_url or settings.public_base_url).rstrip("/")
     return public_base_url + f"/api/frame/asset/{token}"
+
+
+async def _attach_image(
+    session: AsyncSession,
+    response: FramePollResponse,
+    target: RenderTarget,
+    payload: bytes,
+    asset_base_url: str | None,
+) -> None:
+    mime = image_mime_for_target(target)
+    token = await _cache_image(session, payload, mime)
+    response.type = "image"
+    response.image_url = _image_url(token, asset_base_url)
+    response.image_mime = mime
+    response.text = None
 
 
 async def _resolve_inbox(
@@ -292,34 +308,19 @@ async def resolve_next_for_frame(
 
     if item.item_type == "inbox":
         jpeg, _meta = await _resolve_inbox(session, frame, target)
-        token = await _cache_jpeg(session, jpeg)
-        response.type = "image"
-        response.image_url = _image_url(token, asset_base_url)
-        response.text = None
+        await _attach_image(session, response, target, jpeg, asset_base_url)
     elif item.item_type == "weather":
         jpeg = await _resolve_weather(frame, target, item.config)
-        token = await _cache_jpeg(session, jpeg)
-        response.type = "image"
-        response.image_url = _image_url(token, asset_base_url)
-        response.text = None
+        await _attach_image(session, response, target, jpeg, asset_base_url)
     elif item.item_type == "xkcd":
         jpeg = await _resolve_xkcd(target)
-        token = await _cache_jpeg(session, jpeg)
-        response.type = "image"
-        response.image_url = _image_url(token, asset_base_url)
-        response.text = None
+        await _attach_image(session, response, target, jpeg, asset_base_url)
     elif item.item_type in ("rss", "bbc"):
         jpeg = await _resolve_rss(target, item.config)
-        token = await _cache_jpeg(session, jpeg)
-        response.type = "image"
-        response.image_url = _image_url(token, asset_base_url)
-        response.text = None
+        await _attach_image(session, response, target, jpeg, asset_base_url)
     elif item.item_type == "reddit":
         jpeg = await _resolve_reddit(target, item.config)
-        token = await _cache_jpeg(session, jpeg)
-        response.type = "image"
-        response.image_url = _image_url(token, asset_base_url)
-        response.text = None
+        await _attach_image(session, response, target, jpeg, asset_base_url)
     elif item.item_type == "static":
         text = (item.config or {}) if item.config else {}
         response.type = "text"

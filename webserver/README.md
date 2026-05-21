@@ -85,7 +85,8 @@ Response:
 ```
 
 `type` can be `image`, `text`, `plugin`, or `sleep`. The frame fetches
-`image_url` (if present) and decodes it with `jpegdec`, or runs the plugin
+`image_url` (if present) and decodes it (`pngdec` for PNG when an SD card is
+present, otherwise `jpegdec`), or runs the plugin
 code, or draws the inline text.
 
 ## Coolify deployment
