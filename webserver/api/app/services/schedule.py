@@ -80,18 +80,24 @@ async def _attach_image(
     target: RenderTarget,
     payload: bytes,
     asset_base_url: str | None,
+    *,
+    png_posterize: bool = False,
 ) -> None:
     mime = image_mime_for_target(target)
     token = await _cache_image(session, payload, mime)
     response.type = "image"
     response.image_url = _image_url(token, asset_base_url)
     response.image_mime = mime
+    response.image_posterize = png_posterize if mime == "image/png" else None
     response.text = None
 
 
 async def _resolve_inbox(
-    session: AsyncSession, frame: Frame, target: RenderTarget
-) -> tuple[str, Optional[dict]]:
+    session: AsyncSession,
+    frame: Frame,
+    target: RenderTarget,
+    schedule_config: Optional[dict] = None,
+) -> tuple[bytes, Optional[dict]]:
     item = (
         await session.execute(
             select(InboxItem)
@@ -128,7 +134,10 @@ async def _resolve_inbox(
             body="No new messages waiting.\nAsk a friend to send something!",
             accent="GREEN",
         )
-        return jpeg, {"kind": "empty"}
+        return jpeg, {"kind": "empty", "png_posterize": False}
+
+    posterize_enabled = bool((schedule_config or {}).get("png_posterize", True))
+    png_posterize = posterize_enabled and item.kind == "drawing"
 
     if item.kind == "link" and item.image_bytes:
         # Link cards already reserve their bottom-right corner for a QR code.
@@ -148,7 +157,7 @@ async def _resolve_inbox(
     delete_after = frame.inbox_delete_after_displays
     if delete_after and item.display_count >= delete_after:
         await session.delete(item)
-    return jpeg, {"kind": item.kind, "inbox_id": item.id}
+    return jpeg, {"kind": item.kind, "inbox_id": item.id, "png_posterize": png_posterize}
 
 
 async def _resolve_weather(frame: Frame, target: RenderTarget, config: Optional[dict] = None) -> bytes:
@@ -307,8 +316,15 @@ async def resolve_next_for_frame(
     )
 
     if item.item_type == "inbox":
-        jpeg, _meta = await _resolve_inbox(session, frame, target)
-        await _attach_image(session, response, target, jpeg, asset_base_url)
+        jpeg, meta = await _resolve_inbox(session, frame, target, item.config)
+        await _attach_image(
+            session,
+            response,
+            target,
+            jpeg,
+            asset_base_url,
+            png_posterize=bool((meta or {}).get("png_posterize")),
+        )
     elif item.item_type == "weather":
         jpeg = await _resolve_weather(frame, target, item.config)
         await _attach_image(session, response, target, jpeg, asset_base_url)

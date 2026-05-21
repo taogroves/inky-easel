@@ -11,6 +11,7 @@ Protocol (POST /api/frame/poll):
   response = { "type": "image"|"text"|"plugin"|"sleep",
                "image_url": str | null,
                "image_mime": str | null,
+               "image_posterize": bool | null,
                "text": { "title": str, "body": str, "accent": str } | null,
                "plugin": { "code": str, "context": dict } | null,
                "sleep_minutes": int,
@@ -149,16 +150,18 @@ def download_jpeg(url, dest=None, mime=None):
     return download_image(url, dest=dest, mime=mime)
 
 
-def render_image(graphics, path=None, mime=None):
+def render_image(graphics, path=None, mime=None, posterize=False):
     if path is None:
         path = _content_path()
     use_png = mime == "image/png" or str(path).lower().endswith(".png")
     if use_png:
+        import pngdec
         from pngdec import PNG
 
+        mode = pngdec.PNG_POSTERISE if posterize else pngdec.PNG_DITHER
         png = PNG(graphics)
         png.open_file(path)
-        png.decode(0, 0)
+        png.decode(0, 0, mode=mode)
         return
     import jpegdec
 

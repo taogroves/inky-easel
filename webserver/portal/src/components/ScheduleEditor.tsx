@@ -30,6 +30,7 @@ function blankFor(type: EditorItem["item_type"]): EditorItem {
   if (type === "rss") config = { feed_url: "https://feeds.bbci.co.uk/news/rss.xml" };
   if (type === "reddit") config = { subreddit: "news" };
   if (type === "weather") config = { units: "celsius" };
+  if (type === "inbox") config = { png_posterize: true };
   return { item_type: type, item_ref: null, config, sleep_minutes: preset.defaultSleep, start_minute: null };
 }
 
@@ -216,6 +217,19 @@ export default function ScheduleEditor({
                         </select>
                       </div>
                     </>
+                  )}
+
+                  {item.item_type === "inbox" && (
+                    <div className="md:col-span-2">
+                      <label className="inline-flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={Boolean((item.config as { png_posterize?: boolean })?.png_posterize ?? true)}
+                          onChange={(e) => update(idx, { config: { ...item.config, png_posterize: e.target.checked } })}
+                        />
+                        Posterize drawings (sharp pixel art; photos and links use dithering)
+                      </label>
+                    </div>
                   )}
 
                   {item.item_type === "weather" && (
