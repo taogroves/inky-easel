@@ -333,6 +333,23 @@ def _configuration_status(status="available", message=None):
     }
 
 
+def _flash_configuration_exit_leds():
+    ih.stop_configuration_mode_leds()
+    for _ in range(3):
+        try:
+            inky_frame.led_busy.on()
+        except AttributeError:
+            pass
+        ih.network_led(85)
+        time.sleep_ms(180)
+        try:
+            inky_frame.led_busy.off()
+        except AttributeError:
+            pass
+        ih.network_led(0)
+        time.sleep_ms(180)
+
+
 def _apply_configuration(command):
     desired = command.get("config") or {}
     wifi_config.update(
@@ -405,9 +422,7 @@ def _configuration_loop(graphics, width, height, server_url, frame_id, frame_sec
                 firmware_version=FIRMWARE_VERSION,
                 configuration_status=status,
             )
-            scene.draw_configuration_screen(graphics, width, height, "saved")
-            _update_display(graphics)
-            time.sleep(1)
+            _flash_configuration_exit_leds()
             _reset_cleanly()
         except Exception as e:
             print("Configuration apply failed:", e)

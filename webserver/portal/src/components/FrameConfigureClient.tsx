@@ -39,6 +39,7 @@ export default function FrameConfigureClient({
   const [firmwareReleaseId, setFirmwareReleaseId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hydratedFromFrame, setHydratedFromFrame] = useState(false);
 
   const releases = session.releases;
   const canSave = useMemo(() => {
@@ -47,11 +48,12 @@ export default function FrameConfigureClient({
   }, [activeWifiIndex, credentials, serverUrl]);
 
   useEffect(() => {
-    if (!session.observed) return;
+    if (!session.observed || hydratedFromFrame) return;
     setCredentials(session.observed.wifi_credentials.length ? session.observed.wifi_credentials : [blankCredential()]);
     setActiveWifiIndex(session.observed.active_wifi_index);
     setServerUrl(session.observed.server_url);
-  }, [session.observed]);
+    setHydratedFromFrame(true);
+  }, [hydratedFromFrame, session.observed]);
 
   useEffect(() => {
     if (!["pending", "connected", "applying", "error"].includes(session.state)) return;
@@ -87,6 +89,13 @@ export default function FrameConfigureClient({
   async function post(action: "start" | "save" | "cancel", payload?: SavePayload) {
     setBusy(true);
     setError(null);
+    if (action === "start") {
+      setHydratedFromFrame(false);
+      setCredentials([]);
+      setActiveWifiIndex(0);
+      setServerUrl("");
+      setFirmwareReleaseId("");
+    }
     try {
       const resp = await fetch(`/dashboard/frames/${frameId}/configure/session`, {
         method: "POST",
@@ -136,7 +145,7 @@ export default function FrameConfigureClient({
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <button className="btn-primary" type="button" disabled={busy} onClick={() => post("start")}>
-            {session.state === "pending" ? "Waiting for frame..." : "Start configuration mode"}
+            {session.state === "pending" ? "Connecting..." : "Start configuration mode"}
           </button>
           <button className="btn-secondary" type="button" disabled={busy} onClick={() => post("cancel")}>
             Cancel
@@ -270,7 +279,8 @@ function StatusBadge({ state }: { state: FrameConfigurationSession["state"] }) {
         : state === "idle"
           ? "bg-ink/10 text-ink-soft"
           : "bg-amber-100 text-amber-900";
-  return <span className={`mt-4 inline-flex rounded-full px-3 py-1 text-xs font-medium ${cls}`}>{state.replaceAll("_", " ")}</span>;
+  const label = state === "pending" ? "[connecting...]" : state === "connected" ? "[connected]" : state.replaceAll("_", " ");
+  return <span className={`mt-4 inline-flex rounded-full px-3 py-1 text-xs font-medium ${cls}`}>{label}</span>;
 }
 
 function FirmwareSelector({
