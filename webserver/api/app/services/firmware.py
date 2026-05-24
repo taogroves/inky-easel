@@ -113,23 +113,35 @@ def _collection() -> Collection[dict[str, Any]]:
 def _release_from_doc(doc: dict[str, Any] | None) -> FirmwareReleaseDoc | None:
     if not doc:
         return None
+    version = str(doc["version"])
+    files = [
+        FirmwareFileDoc(
+            path=str(item["path"]),
+            sha256=str(item["sha256"]),
+            size_bytes=int(item["size_bytes"]),
+            content=str(item.get("content", "")),
+        )
+        for item in doc.get("files", [])
+    ]
+    if not any(file.path == "firmware_version.py" for file in files):
+        content = _version_file(version)
+        files.append(
+            FirmwareFileDoc(
+                path="firmware_version.py",
+                sha256=_sha256(content),
+                size_bytes=len(content.encode("utf-8")),
+                content=content,
+            )
+        )
     return FirmwareReleaseDoc(
         id=str(doc["id"]),
-        version=str(doc["version"]),
+        version=version,
         notes=doc.get("notes"),
         active=bool(doc.get("active", False)),
         manifest_hash=str(doc["manifest_hash"]),
         created_at=doc.get("created_at") or datetime.utcnow(),
         created_by_user_id=doc.get("created_by_user_id"),
-        files=[
-            FirmwareFileDoc(
-                path=str(item["path"]),
-                sha256=str(item["sha256"]),
-                size_bytes=int(item["size_bytes"]),
-                content=str(item.get("content", "")),
-            )
-            for item in doc.get("files", [])
-        ],
+        files=files,
     )
 
 
@@ -251,6 +263,14 @@ async def get_firmware_file(release_id: str, path: str) -> FirmwareFileDoc | Non
             (file for file in doc.get("files", []) if str(file.get("path")) == path),
             None,
         )
+        if item is None and path == "firmware_version.py":
+            content = _version_file(str(doc["version"]))
+            return FirmwareFileDoc(
+                path="firmware_version.py",
+                sha256=_sha256(content),
+                size_bytes=len(content.encode("utf-8")),
+                content=content,
+            )
         if not item:
             return None
         return FirmwareFileDoc(

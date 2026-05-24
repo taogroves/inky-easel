@@ -38,9 +38,15 @@ async def poll(
         frame.last_has_sd_card = payload.has_sd_card
     if payload.firmware_version:
         frame.firmware_version = payload.firmware_version
-        if frame.target_firmware_version == payload.firmware_version:
-            frame.last_firmware_status = "installed"
-            frame.last_firmware_update_at = now
+
+    release = await latest_active_release()
+    if release and payload.firmware_version == release.version:
+        frame.target_firmware_version = release.version
+        frame.last_firmware_status = "installed"
+        frame.last_firmware_update_at = now
+    elif payload.firmware_version and frame.target_firmware_version == payload.firmware_version:
+        frame.last_firmware_status = "installed"
+        frame.last_firmware_update_at = now
 
     response = await resolve_next_for_frame(
         session,
@@ -49,7 +55,6 @@ async def poll(
         has_sd_card=payload.has_sd_card,
     )
     response.low_battery_warning = payload.battery_percent < 20
-    release = await latest_active_release()
     if (
         release
         and payload.has_sd_card is not False

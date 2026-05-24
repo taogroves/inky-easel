@@ -62,6 +62,10 @@ def all_leds_off():
         inky_frame.led_busy.off()
     except AttributeError:
         pass
+    try:
+        inky_frame.led_wifi.off()
+    except AttributeError:
+        pass
 
 
 def sync_rtc_time(ssid=None, password=None):

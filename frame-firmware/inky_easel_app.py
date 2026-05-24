@@ -86,6 +86,15 @@ def _update_display(graphics):
         inky_frame.led_busy.off()
 
 
+def _reset_cleanly():
+    try:
+        ih.all_leds_off()
+    except Exception as e:
+        print("LED cleanup failed:", e)
+    time.sleep_ms(100)
+    machine.reset()
+
+
 WIFI_CONNECT_ATTEMPTS = 3
 WIFI_CONNECT_RETRY_SEC = 2
 
@@ -200,7 +209,7 @@ def _scheduled_refresh(graphics, width, height, server_url, frame_id,
 
             firmware_updater.apply_update(update, current_version=FIRMWARE_VERSION)
             print("Resetting into updated firmware")
-            machine.reset()
+            _reset_cleanly()
         except Exception as e:
             print("Firmware update failed:", e)
             _show_error(graphics, width, height, "Firmware update failed")
