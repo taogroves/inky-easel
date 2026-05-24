@@ -124,6 +124,10 @@ class Frame(Base):
     last_battery_percent: Mapped[Optional[int]] = mapped_column(Integer)
     last_battery_voltage: Mapped[Optional[float]] = mapped_column()
     last_has_sd_card: Mapped[Optional[bool]] = mapped_column(Boolean)
+    firmware_version: Mapped[Optional[str]] = mapped_column(String(64))
+    target_firmware_version: Mapped[Optional[str]] = mapped_column(String(64))
+    last_firmware_status: Mapped[Optional[str]] = mapped_column(String(32))
+    last_firmware_update_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()

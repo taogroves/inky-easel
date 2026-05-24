@@ -7,7 +7,6 @@ the user's SD card via the File System Access API (or downloads a ZIP).
 
 from __future__ import annotations
 
-from pathlib import Path
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -20,27 +19,9 @@ from ..config import get_settings
 from ..db import get_session
 from ..models import Frame, User
 from ..schemas import FrameSecretOut, SetupBundleOut
+from ..services.firmware import FIRMWARE_FILES, firmware_dir, latest_active_release
 
 router = APIRouter(prefix="/api/setup", tags=["setup"])
-
-
-def _firmware_dir() -> Path:
-    configured = Path(get_settings().frame_firmware_dir)
-    if configured.exists():
-        return configured
-    # Fallback for local `uvicorn app.main:app` runs from repo root.
-    return Path(__file__).resolve().parents[4] / "frame-firmware"
-
-
-FIRMWARE_FILES = [
-    "main.py",
-    "flash_loader_main.py",
-    "inky_easel_app.py",
-    "frame_client.py",
-    "battery.py",
-    "display.py",
-    "inky_helper.py",
-]
 
 
 class WifiBody(BaseModel):
@@ -104,13 +85,17 @@ async def build_bundle(
     settings = get_settings()
     server_url = body.server_url or settings.public_base_url.rstrip("/")
 
-    firmware_dir = _firmware_dir()
     files: dict[str, str] = {}
-    for name in FIRMWARE_FILES:
-        path = firmware_dir / name
-        if not path.exists():
-            raise HTTPException(500, f"Firmware source missing: {name}")
-        files[name] = path.read_text(encoding="utf-8")
+    release = await latest_active_release()
+    if release:
+        files.update({file.path: file.content for file in release.files})
+    else:
+        root = firmware_dir()
+        for name in FIRMWARE_FILES:
+            path = root / name
+            if not path.exists():
+                raise HTTPException(500, f"Firmware source missing: {name}")
+            files[name] = path.read_text(encoding="utf-8")
 
     files["secrets.py"] = _render_secrets(body)
     files["frame_config.py"] = _render_config(frame, server_url)
@@ -123,6 +108,8 @@ async def build_bundle(
         "flash as main.py. You only need to do that once.\n"
         f"\nFrame name: {frame.name}\nDisplay: {frame.display_type}\nServer URL: {server_url}\n"
         "If you change Wi-Fi or your server URL, re-run the setup wizard.\n"
+        "After this first SD write, firmware updates are delivered automatically\n"
+        "during frame check-ins and the previous SD files are backed up.\n"
     )
 
     return SetupBundleOut(

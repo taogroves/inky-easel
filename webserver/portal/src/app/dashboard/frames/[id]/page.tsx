@@ -48,6 +48,9 @@ export default async function FrameDetailPage(props: { params: Promise<{ id: str
             <div className="flex justify-between"><dt className="text-ink-soft">Disconnects after</dt><dd>{formatDateTime(frame.disconnected_after, frame.timezone)}</dd></div>
             <div className="flex justify-between"><dt className="text-ink-soft">Battery</dt><dd>{frame.last_battery_percent != null ? `${frame.last_battery_percent}%` : "no data"}</dd></div>
             <div className="flex justify-between"><dt className="text-ink-soft">Voltage</dt><dd>{frame.last_battery_voltage != null ? `${frame.last_battery_voltage.toFixed(2)} V` : "—"}</dd></div>
+            <div className="flex justify-between"><dt className="text-ink-soft">Firmware</dt><dd>{frame.firmware_version ?? "unknown"}</dd></div>
+            <div className="flex justify-between"><dt className="text-ink-soft">Target firmware</dt><dd>{frame.target_firmware_version ?? "—"}</dd></div>
+            <div className="flex justify-between"><dt className="text-ink-soft">Firmware status</dt><dd>{frame.last_firmware_status ?? "—"}</dd></div>
             <div className="flex justify-between"><dt className="text-ink-soft">Display</dt><dd>{frame.display_type}</dd></div>
             <div className="flex justify-between"><dt className="text-ink-soft">Inbox</dt><dd>{frame.inbox_mode}</dd></div>
             <div className="flex justify-between"><dt className="text-ink-soft">Location</dt><dd>{frame.latitude != null && frame.longitude != null ? `${frame.latitude.toFixed(2)}, ${frame.longitude.toFixed(2)}` : "—"}</dd></div>

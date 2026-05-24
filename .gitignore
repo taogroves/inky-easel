@@ -76,3 +76,4 @@ webserver/docker-compose.override.yml
 *.tfstate
 *.tfstate.*
 .terraform.lock.hcl
+webserver/.env

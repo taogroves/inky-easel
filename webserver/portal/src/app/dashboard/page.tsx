@@ -96,6 +96,7 @@ export default async function DashboardPage() {
                   <span className={`ml-2 inline-flex items-center gap-1 ${conn.cls}`}>
                     <span className={`inline-block h-2 w-2 rounded-full ${conn.dot}`} /> {conn.label}
                   </span>
+                  <span className="block">Firmware {frame.firmware_version ?? "unknown"}</span>
                   {frame.next_expected_poll_at && (
                     <span className="block">Next expected {relativeFuture(frame.next_expected_poll_at)}</span>
                   )}

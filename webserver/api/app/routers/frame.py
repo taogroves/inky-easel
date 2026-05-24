@@ -11,7 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth import authenticate_frame
 from ..db import get_session
 from ..models import ContentCache, Frame
-from ..schemas import FramePollRequest, FramePollResponse
+from ..schemas import FirmwareUpdateFile, FirmwareUpdatePayload, FramePollRequest, FramePollResponse
+from ..services.firmware import latest_active_release
 from ..services.schedule import resolve_next_for_frame
 
 router = APIRouter(prefix="/api/frame", tags=["frame"])
@@ -35,6 +36,11 @@ async def poll(
     frame.last_battery_voltage = payload.battery_voltage
     if payload.has_sd_card is not None:
         frame.last_has_sd_card = payload.has_sd_card
+    if payload.firmware_version:
+        frame.firmware_version = payload.firmware_version
+        if frame.target_firmware_version == payload.firmware_version:
+            frame.last_firmware_status = "installed"
+            frame.last_firmware_update_at = now
 
     response = await resolve_next_for_frame(
         session,
@@ -43,6 +49,28 @@ async def poll(
         has_sd_card=payload.has_sd_card,
     )
     response.low_battery_warning = payload.battery_percent < 20
+    release = await latest_active_release()
+    if (
+        release
+        and payload.has_sd_card is not False
+        and payload.firmware_version != release.version
+    ):
+        base_url = (payload.server_url or str(request.base_url)).rstrip("/")
+        response.firmware_update = FirmwareUpdatePayload(
+            version=release.version,
+            release_id=release.id,
+            files=[
+                FirmwareUpdateFile(
+                    path=file.path,
+                    url=f"{base_url}/api/frame/firmware/{release.id}/{file.path}",
+                    sha256=file.sha256,
+                    size_bytes=file.size_bytes,
+                )
+                for file in release.files
+            ],
+        )
+        frame.target_firmware_version = release.version
+        frame.last_firmware_status = "offered"
     sleep_minutes = max(1, int(response.sleep_minutes or 1))
     frame.next_expected_poll_at = now + timedelta(minutes=sleep_minutes)
     frame.disconnected_after = frame.next_expected_poll_at + timedelta(

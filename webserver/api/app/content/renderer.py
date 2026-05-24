@@ -307,38 +307,21 @@ def _draw_weather_icon(draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, i
             )
 
 
-def _draw_refresh_icon(draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, color) -> None:
-    """Circular refresh arrow (↻) for the last-updated stamp."""
-    r = max(5, size // 2 - 1)
-    w = max(2, size // 6)
-    bbox = (cx - r, cy - r, cx + r, cy + r)
-    draw.arc(bbox, start=50, end=310, fill=color, width=w)
-    angle = math.radians(310)
-    tip_x = cx + r * math.cos(angle)
-    tip_y = cy + r * math.sin(angle)
-    wing = max(3, size // 4)
-    along = math.radians(280)
-    draw.polygon(
-        [
-            (tip_x, tip_y),
-            (tip_x - wing * math.cos(along) + wing * 0.5 * math.sin(along),
-             tip_y - wing * math.sin(along) - wing * 0.5 * math.cos(along)),
-            (tip_x - wing * math.cos(along) - wing * 0.5 * math.sin(along),
-             tip_y - wing * math.sin(along) + wing * 0.5 * math.cos(along)),
-        ],
-        fill=color,
-    )
-
-
 def _format_updated_at(iso_value: str | None, timezone: str | None) -> str | None:
     if not iso_value:
         return None
     try:
-        when = datetime.fromisoformat(iso_value.replace("Z", "+00:00"))
-        if timezone and timezone != "auto":
-            from zoneinfo import ZoneInfo
+        from zoneinfo import ZoneInfo
 
-            when = when.astimezone(ZoneInfo(timezone))
+        when = datetime.fromisoformat(iso_value.replace("Z", "+00:00"))
+        tz_name = timezone if timezone and timezone != "auto" else None
+        if tz_name:
+            tz = ZoneInfo(tz_name)
+            if when.tzinfo is None:
+                # Open-Meteo returns naive local times for the requested timezone.
+                when = when.replace(tzinfo=tz)
+            else:
+                when = when.astimezone(tz)
         return when.strftime("%H:%M")
     except ValueError:
         if "T" in iso_value:
@@ -468,7 +451,7 @@ def _render_moon_phase_image(size: int, illumination: float | None, *, waxing: b
     diameter = max(32, size * 2)
     r = diameter / 2.0
     dark = (48, 52, 68)
-    light = (232, 236, 244)
+    light = INKY_PALETTE["YELLOW"]
     moon = Image.new("RGBA", (diameter, diameter), (0, 0, 0, 0))
     pixels = moon.load()
     phase = _moon_phase_angle(illumination, waxing)
@@ -563,7 +546,7 @@ def render_weather(target: RenderTarget, payload: dict) -> bytes:
     moon = payload.get("moon") or {}
     moon_size = int(min(hero_h * 0.5, 80 * scale))
     moon_cx = target.width - margin - moon_size // 2
-    moon_cy = int(hero_h * 0.4)
+    moon_cy = ty + moon_size // 2
     if moon:
         _paste_moon_phase(
             img,
@@ -628,18 +611,30 @@ def render_weather(target: RenderTarget, payload: dict) -> bytes:
 
     updated = _format_updated_at(payload.get("updated_at"), payload.get("timezone"))
     if updated:
+        label_font = _load_font(max(12, int(13 * scale)))
         stamp_font = _load_font(max(16, int(16 * scale)), bold=True)
+        label = "Last Updated:"
+        label_bbox = draw.textbbox((0, 0), label, font=label_font)
         time_bbox = draw.textbbox((0, 0), updated, font=stamp_font)
+        label_w = label_bbox[2] - label_bbox[0]
+        label_h = label_bbox[3] - label_bbox[1]
         time_w = time_bbox[2] - time_bbox[0]
         time_h = time_bbox[3] - time_bbox[1]
-        icon_size = max(12, int(14 * scale))
-        gap = max(3, int(4 * scale))
-        stamp_y = target.height - margin - time_h
-        text_x = target.width - margin - time_w
-        icon_cx = text_x - gap - icon_size // 2
-        icon_cy = stamp_y + time_h // 2
-        _draw_refresh_icon(draw, icon_cx, icon_cy, icon_size, INKY_PALETTE["BLACK"])
-        draw.text((text_x, stamp_y), updated, fill=INKY_PALETTE["BLACK"], font=stamp_font)
+        line_gap = max(2, int(3 * scale))
+        block_h = label_h + line_gap + time_h
+        stamp_y = target.height - margin - block_h
+        draw.text(
+            (target.width - margin - label_w, stamp_y),
+            label,
+            fill=accent,
+            font=label_font,
+        )
+        draw.text(
+            (target.width - margin - time_w, stamp_y + label_h + line_gap),
+            updated,
+            fill=INKY_PALETTE["BLACK"],
+            font=stamp_font,
+        )
 
     weather_q = 80 if not target.has_sd_card else None
     return _finalize_image(img, target, quality=weather_q)

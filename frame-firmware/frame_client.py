@@ -6,7 +6,8 @@ Protocol (POST /api/frame/poll):
   request  = { "frame_id": str, "secret": str,
                "battery_voltage": float, "battery_percent": int,
                "wakeup": "rtc"|"button"|"power",
-               "has_sd_card": bool }
+               "has_sd_card": bool,
+               "firmware_version": str }
 
   response = { "type": "image"|"text"|"plugin"|"sleep",
                "image_url": str | null,
@@ -14,6 +15,8 @@ Protocol (POST /api/frame/poll):
                "image_posterize": bool | null,
                "text": { "title": str, "body": str, "accent": str } | null,
                "plugin": { "code": str, "context": dict } | null,
+               "firmware_update": { "version": str, "release_id": str,
+                                     "files": list } | null,
                "sleep_minutes": int,
                "low_battery_warning": bool }
 """
@@ -99,7 +102,8 @@ def _http_post_json(url, payload):
         raise PollError("Bad JSON: {} ({})".format(_preview(text), e))
 
 
-def poll(server_url, frame_id, secret, battery_voltage, battery_percent, wakeup, has_sd_card=False):
+def poll(server_url, frame_id, secret, battery_voltage, battery_percent, wakeup,
+         has_sd_card=False, firmware_version=None):
     url = server_url.rstrip("/") + "/api/frame/poll"
     payload = {
         "frame_id": frame_id,
@@ -109,6 +113,7 @@ def poll(server_url, frame_id, secret, battery_voltage, battery_percent, wakeup,
         "battery_percent": battery_percent,
         "wakeup": wakeup,
         "has_sd_card": bool(has_sd_card),
+        "firmware_version": firmware_version,
     }
     try:
         return _http_post_json(url, payload)

@@ -25,6 +25,11 @@ import battery
 import display as scene
 import frame_client
 
+try:
+    from firmware_version import FIRMWARE_VERSION
+except ImportError:
+    FIRMWARE_VERSION = "unknown"
+
 
 def _import_display():
     """Resolve the PicoGraphics DISPLAY constant from frame_config.DISPLAY_TYPE."""
@@ -175,7 +180,7 @@ def _scheduled_refresh(graphics, width, height, server_url, frame_id,
         ih.network_led(100)
         response = frame_client.poll(
             server_url, frame_id, frame_secret, voltage, percent, wakeup,
-            has_sd_card=has_sd_card,
+            has_sd_card=has_sd_card, firmware_version=FIRMWARE_VERSION,
         )
     except frame_client.PollError as e:
         ih.stop_network_led()
@@ -187,6 +192,19 @@ def _scheduled_refresh(graphics, width, height, server_url, frame_id,
         return None, 1, False
     finally:
         ih.stop_network_led()
+
+    update = response.get("firmware_update")
+    if update:
+        try:
+            import firmware_updater
+
+            firmware_updater.apply_update(update, current_version=FIRMWARE_VERSION)
+            print("Resetting into updated firmware")
+            machine.reset()
+        except Exception as e:
+            print("Firmware update failed:", e)
+            _show_error(graphics, width, height, "Firmware update failed")
+            return None, 1, False
 
     try:
         _render_with_battery(graphics, width, height, response, percent)

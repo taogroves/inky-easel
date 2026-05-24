@@ -37,6 +37,20 @@ class FramePollRequest(ApiModel):
     battery_percent: int = 0
     wakeup: Literal["rtc", "button", "power"] = "rtc"
     has_sd_card: Optional[bool] = None
+    firmware_version: Optional[str] = None
+
+
+class FirmwareUpdateFile(ApiModel):
+    path: str
+    url: str
+    sha256: str
+    size_bytes: int
+
+
+class FirmwareUpdatePayload(ApiModel):
+    version: str
+    release_id: str
+    files: list[FirmwareUpdateFile]
 
 
 class TextPayload(ApiModel):
@@ -57,6 +71,7 @@ class FramePollResponse(ApiModel):
     image_posterize: Optional[bool] = None
     text: Optional[TextPayload] = None
     plugin: Optional[PluginPayload] = None
+    firmware_update: Optional[FirmwareUpdatePayload] = None
     sleep_minutes: int = 60
     low_battery_warning: bool = False
 
@@ -106,6 +121,10 @@ class FrameOut(ApiModel):
     last_battery_percent: Optional[int]
     last_battery_voltage: Optional[float]
     last_has_sd_card: Optional[bool] = None
+    firmware_version: Optional[str] = None
+    target_firmware_version: Optional[str] = None
+    last_firmware_status: Optional[str] = None
+    last_firmware_update_at: Optional[datetime] = None
     created_at: datetime
 
     class Config:
@@ -194,3 +213,36 @@ class SetupBundleOut(ApiModel):
     frame: FrameSecretOut
     files: dict[str, str]
     server_url: str
+
+
+class FirmwareReleaseCreate(ApiModel):
+    version: str = Field(..., min_length=1, max_length=64, pattern=r"^[A-Za-z0-9._+-]+$")
+    notes: Optional[str] = None
+    activate: bool = True
+
+
+class FirmwareFileOut(ApiModel):
+    path: str
+    sha256: str
+    size_bytes: int
+
+    class Config:
+        from_attributes = True
+
+
+class FirmwareReleaseOut(ApiModel):
+    id: str
+    version: str
+    notes: Optional[str]
+    active: bool
+    manifest_hash: str
+    created_at: datetime
+    files: list[FirmwareFileOut] = Field(default_factory=list)
+
+    class Config:
+        from_attributes = True
+
+
+class FirmwareAdminOut(ApiModel):
+    frames: list[FrameOut]
+    releases: list[FirmwareReleaseOut]

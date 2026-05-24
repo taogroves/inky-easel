@@ -14,6 +14,8 @@ requested duration.
 | `main.py` | SD-card compatibility wrapper for firmware that boots SD `main.py` directly. |
 | `inky_easel_app.py` | App entry. Orchestrates wake -> poll -> render -> sleep. |
 | `frame_client.py` | HTTP poll, JPEG streaming, plugin runner. |
+| `firmware_updater.py` | Downloads, verifies, backs up, and swaps SD firmware release files. |
+| `firmware_version.py` | Generated release version reported on every poll. |
 | `battery.py` | VSYS ADC sampling and percent conversion. |
 | `display.py` | Battery overlay, critical-battery screen, text rendering. |
 | `inky_helper.py` | Wi-Fi connect, helpers (lifted from Pimoroni examples). |
@@ -28,8 +30,11 @@ Thonny or another MicroPython file browser. Do not put Wi-Fi credentials or
 frame secrets in flash.
 
 The loader mounts `/sd`, puts `/sd` first on `sys.path`, and imports
-`/sd/inky_easel_app.py`. After the loader is installed, normal updates only
-require rewriting the SD card bundle.
+`/sd/inky_easel_app.py`. After the loader is installed, frames can apply active
+firmware releases from the webserver during their normal poll cycle without
+opening the enclosure. The updater writes downloaded files to `.new` paths,
+checks their SHA-256 hashes, backs up the previous SD files under
+`/sd/_firmware_backups`, then swaps the verified files in and resets.
 
 ## How the portal deploys this
 

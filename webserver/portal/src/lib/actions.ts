@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { api, ApiError, type FrameWithSecret, type InboxItem, type Plugin, type ScheduleItem, type SetupBundle } from "@/lib/api";
+import { requireAdminDashboardAccess } from "@/lib/admin-auth";
+import { api, ApiError, type FirmwareRelease, type FrameWithSecret, type InboxItem, type Plugin, type ScheduleItem, type SetupBundle } from "@/lib/api";
 
 export type ActionResult<T = undefined> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -204,6 +205,38 @@ export async function deletePluginAction(pluginId: string): Promise<ActionResult
     await api(`/api/plugins/${pluginId}`, { method: "DELETE" });
     revalidatePath("/dashboard/plugins");
     return { ok: true, data: undefined };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ---------- Firmware ----------
+
+export async function createFirmwareReleaseAction(formData: FormData): Promise<ActionResult<FirmwareRelease>> {
+  try {
+    await requireAdminDashboardAccess();
+    const release = await api<FirmwareRelease>("/api/firmware/releases", {
+      method: "POST",
+      body: JSON.stringify({
+        version: String(formData.get("version") ?? "").trim(),
+        notes: nullableString(formData.get("notes")),
+        activate: formData.getAll("activate").includes("on"),
+      }),
+    });
+    revalidatePath("/dashboard/admin");
+    revalidatePath("/dashboard");
+    return { ok: true, data: release };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function activateFirmwareReleaseAction(releaseId: string): Promise<ActionResult<FirmwareRelease>> {
+  try {
+    await requireAdminDashboardAccess();
+    const release = await api<FirmwareRelease>(`/api/firmware/releases/${releaseId}/activate`, { method: "POST" });
+    revalidatePath("/dashboard/admin");
+    return { ok: true, data: release };
   } catch (e) {
     return fail(e);
   }

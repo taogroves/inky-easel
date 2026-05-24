@@ -47,6 +47,8 @@ def _prefer_sd_imports():
         "display",
         "frame_client",
         "frame_config",
+        "firmware_updater",
+        "firmware_version",
         "inky_helper",
         "secrets",
     ):

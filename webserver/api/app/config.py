@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     cors_origins: str = Field("http://localhost:3000", alias="CORS_ORIGINS")
     content_cache_minutes: int = Field(15, alias="CONTENT_CACHE_MINUTES")
     frame_firmware_dir: str = Field("/app/frame-firmware", alias="FRAME_FIRMWARE_DIR")
+    firestore_mongodb_uri: str | None = Field(None, alias="FIRESTORE_MONGODB_URI")
+    firestore_mongodb_database: str = Field("", alias="FIRESTORE_MONGODB_DATABASE")
+    firmware_releases_collection: str = Field("firmware_releases", alias="FIRMWARE_RELEASES_COLLECTION")
 
     @property
     def cors_origin_list(self) -> list[str]:

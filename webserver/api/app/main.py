@@ -30,7 +30,7 @@ from .models import (  # noqa: F401 ensure metadata sees these tables
     ScheduleItem,
     User,
 )
-from .routers import frame, frames, inbox, plugins, schedule, setup
+from .routers import firmware, frame, frames, inbox, plugins, schedule, setup
 
 settings = get_settings()
 log = logging.getLogger("inky-easel.api")
@@ -50,6 +50,10 @@ async def _repair_schema() -> None:
         "ALTER TABLE ie_frame ADD COLUMN IF NOT EXISTS next_expected_poll_at DATETIME NULL",
         "ALTER TABLE ie_frame ADD COLUMN IF NOT EXISTS disconnected_after DATETIME NULL",
         "ALTER TABLE ie_frame ADD COLUMN IF NOT EXISTS last_has_sd_card BOOL NULL",
+        "ALTER TABLE ie_frame ADD COLUMN IF NOT EXISTS firmware_version VARCHAR(64) NULL",
+        "ALTER TABLE ie_frame ADD COLUMN IF NOT EXISTS target_firmware_version VARCHAR(64) NULL",
+        "ALTER TABLE ie_frame ADD COLUMN IF NOT EXISTS last_firmware_status VARCHAR(32) NULL",
+        "ALTER TABLE ie_frame ADD COLUMN IF NOT EXISTS last_firmware_update_at DATETIME NULL",
         "ALTER TABLE ie_inbox_item ADD COLUMN IF NOT EXISTS display_count INT NOT NULL DEFAULT 0",
         "ALTER TABLE ie_schedule_item ADD COLUMN IF NOT EXISTS start_minute INT NULL",
     ]
@@ -75,6 +79,7 @@ def create_app() -> FastAPI:
     app.include_router(schedule.router)
     app.include_router(inbox.router)
     app.include_router(plugins.router)
+    app.include_router(firmware.router)
     app.include_router(setup.router)
 
     @app.get("/healthz")

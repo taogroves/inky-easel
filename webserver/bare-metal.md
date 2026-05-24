@@ -79,6 +79,7 @@ CORS_ORIGINS=https://inky.taogroves.com
 
 BETTER_AUTH_URL=https://inky.taogroves.com
 BETTER_AUTH_TRUSTED_ORIGINS=https://inky.taogroves.com
+ADMIN_DASHBOARD_PASSWORD=your-global-admin-password
 ```
 
 The database password must match in three places:
@@ -91,6 +92,19 @@ PORTAL_DATABASE_URL=mysql://inky:your-db-password@db:3306/inky_easel
 
 Do not use `localhost` in the database URLs. Inside Docker Compose, the database
 hostname is the service name: `db`.
+
+Firmware releases use Firestore's MongoDB-compatible interface rather than the
+MariaDB volume. Add the SCRAM connection string from Firebase/Firestore:
+
+```env
+FIRESTORE_MONGODB_URI=mongodb://user:password@host:27017/?authMechanism=SCRAM-SHA-256&tls=true
+FIRESTORE_MONGODB_DATABASE=
+FIRMWARE_RELEASES_COLLECTION=firmware_releases
+```
+
+If the SCRAM connection string includes a database path, leave
+`FIRESTORE_MONGODB_DATABASE` blank so the API uses the same database Compass
+uses from the URI.
 
 ## 3. Start the stack
 

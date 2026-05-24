@@ -12,6 +12,15 @@ The two HTTP services share the same MariaDB database. The portal owns
 schema migrations (Drizzle). FastAPI auto-creates its own `ie_*` tables on
 startup.
 
+Firmware release snapshots are stored separately in Firestore through its
+MongoDB-compatible SCRAM endpoint. Set `FIRESTORE_MONGODB_URI` in `.env` before
+publishing firmware from the admin dashboard. If the URI contains a database
+path, that database is used automatically; `FIRESTORE_MONGODB_DATABASE` is only
+needed for connection strings without a path.
+
+The firmware admin dashboard is intentionally unlinked from the main portal and
+requires the global `ADMIN_DASHBOARD_PASSWORD` environment variable.
+
 ## Quick start (local)
 
 ```bash

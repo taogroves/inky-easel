@@ -91,6 +91,10 @@ export type Frame = {
   last_battery_percent: number | null;
   last_battery_voltage: number | null;
   last_has_sd_card: boolean | null;
+  firmware_version: string | null;
+  target_firmware_version: string | null;
+  last_firmware_status: string | null;
+  last_firmware_update_at: string | null;
   image_delivery: ImageDelivery;
   created_at: string;
 };
@@ -132,4 +136,25 @@ export type SetupBundle = {
   frame: FrameWithSecret;
   files: Record<string, string>;
   server_url: string;
+};
+
+export type FirmwareFile = {
+  path: string;
+  sha256: string;
+  size_bytes: number;
+};
+
+export type FirmwareRelease = {
+  id: string;
+  version: string;
+  notes: string | null;
+  active: boolean;
+  manifest_hash: string;
+  created_at: string;
+  files: FirmwareFile[];
+};
+
+export type FirmwareAdmin = {
+  frames: Frame[];
+  releases: FirmwareRelease[];
 };
