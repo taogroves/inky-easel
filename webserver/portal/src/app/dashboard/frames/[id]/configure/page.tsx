@@ -15,7 +15,7 @@ export default async function FrameConfigurePage(props: { params: Promise<{ id: 
   let session: FrameConfigurationSession;
   try {
     frame = await api<FrameWithSecret>(`/api/frames/${id}`);
-    session = await api<FrameConfigurationSession>(`/api/frames/${id}/configuration`);
+    session = await api<FrameConfigurationSession>(`/api/frames/${id}/configuration?reset_terminal=true`);
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) notFound();
     throw e;

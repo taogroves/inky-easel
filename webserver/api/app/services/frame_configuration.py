@@ -35,9 +35,24 @@ def get_session(frame_id: str) -> ConfigurationSession | None:
     return _sessions.get(frame_id)
 
 
+def clear_inactive_session(frame_id: str) -> None:
+    session = _sessions.get(frame_id)
+    if session and session.state not in {"entering", "connected", "applying"}:
+        del _sessions[frame_id]
+
+
 def start_session(frame_id: str) -> ConfigurationSession:
     session = ConfigurationSession(frame_id=frame_id, state="pending", updated_at=_now())
     _sessions[frame_id] = session
+    return session
+
+
+def mark_entering(frame_id: str) -> ConfigurationSession | None:
+    session = _sessions.get(frame_id)
+    if session and session.state == "pending":
+        session.state = "entering"
+        session.message = "Frame checked in. Waiting for it to show configuration mode."
+        session.updated_at = _now()
     return session
 
 
@@ -84,7 +99,7 @@ def record_frame_report(frame_id: str, report: FrameConfigurationReport) -> Conf
     elif report.status == "error":
         session.state = "error"
         session.message = report.message or "The frame reported an error."
-    elif session.state == "pending":
+    elif session.state in {"pending", "entering"}:
         session.state = "connected"
         session.message = "Frame is in configuration mode."
     return session

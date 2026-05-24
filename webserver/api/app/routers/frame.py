@@ -76,7 +76,7 @@ async def poll(
         frame_configuration.record_frame_report(frame.id, payload.configuration_status)
 
     config_session = frame_configuration.get_session(frame.id)
-    if config_session and config_session.state in {"pending", "connected", "applying", "cancelled", "error"}:
+    if config_session and config_session.state in {"pending", "entering", "connected", "applying", "cancelled", "error"}:
         command: FrameConfigurationCommand | None = None
         if config_session.state == "cancelled":
             command = FrameConfigurationCommand(mode="cancel")
@@ -107,6 +107,7 @@ async def poll(
                 command = FrameConfigurationCommand(mode="enter")
         else:
             command = FrameConfigurationCommand(mode="enter")
+            frame_configuration.mark_entering(frame.id)
 
         sleep_minutes = 1
         frame.next_expected_poll_at = now + timedelta(seconds=5)

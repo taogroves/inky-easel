@@ -407,8 +407,6 @@ def _configuration_loop(graphics, width, height, server_url, frame_id, frame_sec
             continue
 
         try:
-            scene.draw_configuration_screen(graphics, width, height, "saving")
-            _update_display(graphics)
             _apply_configuration(command)
             status = _configuration_status("applied", "Configuration saved")
             frame_client.poll(

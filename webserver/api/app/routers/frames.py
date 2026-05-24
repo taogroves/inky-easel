@@ -125,10 +125,13 @@ async def get_timezone_for_location(
 @router.get("/{frame_id}/configuration", response_model=FrameConfigurationSessionOut)
 async def configuration_status(
     frame_id: str,
+    reset_terminal: bool = False,
     user: User = Depends(require_service_user),
     session: AsyncSession = Depends(get_session),
 ):
     await _owned_frame(frame_id, user, session)
+    if reset_terminal:
+        frame_configuration.clear_inactive_session(frame_id)
     return await _configuration_out(frame_id)
 
 

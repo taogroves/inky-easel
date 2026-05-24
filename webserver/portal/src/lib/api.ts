@@ -180,7 +180,7 @@ export type FrameConfigurationDesired = {
 };
 
 export type FrameConfigurationSession = {
-  state: "idle" | "pending" | "connected" | "applying" | "applied" | "error" | "cancelled";
+  state: "idle" | "pending" | "entering" | "connected" | "applying" | "applied" | "error" | "cancelled";
   observed: FrameConfigurationReport | null;
   message: string | null;
   updated_at: string;

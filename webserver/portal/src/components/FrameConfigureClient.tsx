@@ -59,7 +59,7 @@ export default function FrameConfigureClient({
   }, [hydratedFromFrame, session.observed]);
 
   useEffect(() => {
-    if (!["pending", "connected", "applying", "error"].includes(session.state)) return;
+    if (!["pending", "entering", "connected", "applying", "error"].includes(session.state)) return;
     let cancelled = false;
     const id = window.setInterval(async () => {
       const next = await fetchSession();
@@ -148,14 +148,13 @@ export default function FrameConfigureClient({
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <button className="btn-primary" type="button" disabled={busy} onClick={() => post("start")}>
-            {session.state === "pending" ? "Connecting..." : "Start configuration mode"}
+            {session.state === "pending" ? "Waiting..." : session.state === "entering" ? "Connecting..." : "Start configuration mode"}
           </button>
           <button className="btn-secondary" type="button" disabled={busy} onClick={() => post("cancel")}>
             Cancel
           </button>
         </div>
-        <StatusBadge state={session.state} />
-        {session.message ? <p className="mt-3 text-sm text-ink-soft">{session.message}</p> : null}
+        <StatusBlock state={session.state} message={session.message} />
         {error ? <p className="mt-3 text-sm text-red-700">{error}</p> : null}
       </section>
 
@@ -277,17 +276,48 @@ export default function FrameConfigureClient({
   );
 }
 
-function StatusBadge({ state }: { state: FrameConfigurationSession["state"] }) {
+function StatusBlock({
+  state,
+  message,
+}: {
+  state: FrameConfigurationSession["state"];
+  message: string | null;
+}) {
   const cls =
-    state === "applied"
+    state === "connected" || state === "applied"
       ? "bg-emerald-100 text-emerald-800"
       : state === "error"
         ? "bg-red-100 text-red-800"
         : state === "idle"
           ? "bg-ink/10 text-ink-soft"
           : "bg-amber-100 text-amber-900";
-  const label = state === "pending" ? "[connecting...]" : state === "connected" ? "[connected]" : state.replaceAll("_", " ");
-  return <span className={`mt-4 inline-flex rounded-full px-3 py-1 text-xs font-medium ${cls}`}>{label}</span>;
+  const labels: Record<FrameConfigurationSession["state"], string> = {
+    idle: "Idle",
+    pending: "Waiting...",
+    entering: "Connecting...",
+    connected: "Connected",
+    applying: "Saving...",
+    applied: "Saved",
+    error: "Error",
+    cancelled: "Cancelled",
+  };
+  const help: Record<FrameConfigurationSession["state"], string> = {
+    idle: "Start configuration mode, then reset the frame when prompted.",
+    pending: "The portal is ready. Reset the frame so it can check in and receive the configuration-mode command.",
+    entering: "The frame checked in and was told to enter configuration mode. Wait for its display to update and report back.",
+    connected: "The frame is in configuration mode. Edit the settings, then save and exit when ready.",
+    applying: "The frame is writing the new settings. Keep it powered on until it confirms.",
+    applied: "The frame confirmed the changes and should reboot back into its schedule.",
+    error: "The frame reported a problem. Check the message below, then cancel or restart configuration mode.",
+    cancelled: "Configuration was cancelled. Restart the frame if it is still showing configuration mode.",
+  };
+  return (
+    <div className="mt-4">
+      <span className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${cls}`}>{labels[state]}</span>
+      <p className="mt-2 text-sm text-ink-soft">{message || help[state]}</p>
+      {message ? <p className="mt-1 text-xs text-ink-soft">{help[state]}</p> : null}
+    </div>
+  );
 }
 
 function FirmwareSelector({

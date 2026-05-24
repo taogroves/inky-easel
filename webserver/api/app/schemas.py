@@ -283,7 +283,7 @@ class FrameConfigurationSave(ApiModel):
 
 
 class FrameConfigurationSessionOut(ApiModel):
-    state: Literal["idle", "pending", "connected", "applying", "applied", "error", "cancelled"]
+    state: Literal["idle", "pending", "entering", "connected", "applying", "applied", "error", "cancelled"]
     observed: Optional[FrameConfigurationReport] = None
     message: Optional[str] = None
     updated_at: datetime
