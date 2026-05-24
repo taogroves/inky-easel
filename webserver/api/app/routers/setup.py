@@ -7,6 +7,7 @@ the user's SD card via the File System Access API (or downloads a ZIP).
 
 from __future__ import annotations
 
+import json
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -58,6 +59,19 @@ def _render_secrets(body: WifiBody) -> str:
     )
 
 
+def _render_wifi_config(body: WifiBody, server_url: str) -> str:
+    return json.dumps(
+        {
+            "wifi_credentials": [
+                {"ssid": body.wifi_ssid, "password": body.wifi_password}
+            ],
+            "active_wifi_index": 0,
+            "server_url": server_url,
+        },
+        indent=2,
+    ) + "\n"
+
+
 def _render_config(frame: Frame, server_url: str) -> str:
     return (
         f'FRAME_ID = "{frame.id}"\n'
@@ -89,6 +103,10 @@ async def build_bundle(
     release = await latest_active_release()
     if release:
         files.update({file.path: file.content for file in release.files})
+        root = firmware_dir()
+        for name in FIRMWARE_FILES:
+            if name not in files and (root / name).exists():
+                files[name] = (root / name).read_text(encoding="utf-8")
     else:
         root = firmware_dir()
         for name in FIRMWARE_FILES:
@@ -98,6 +116,7 @@ async def build_bundle(
             files[name] = path.read_text(encoding="utf-8")
 
     files["secrets.py"] = _render_secrets(body)
+    files["inky_easel_config.json"] = _render_wifi_config(body, server_url)
     files["frame_config.py"] = _render_config(frame, server_url)
     files["README.txt"] = (
         "Inky Easel SD bundle\n"
@@ -107,7 +126,8 @@ async def build_bundle(
         "\nFor new frames, also copy flash_loader_main.py to the frame's internal\n"
         "flash as main.py. You only need to do that once.\n"
         f"\nFrame name: {frame.name}\nDisplay: {frame.display_type}\nServer URL: {server_url}\n"
-        "If you change Wi-Fi or your server URL, re-run the setup wizard.\n"
+        "Wi-Fi credentials live in inky_easel_config.json on the SD card.\n"
+        "After first setup, you can change Wi-Fi or your server URL from the frame dashboard.\n"
         "After this first SD write, firmware updates are delivered automatically\n"
         "during frame check-ins and the previous SD files are backed up.\n"
     )

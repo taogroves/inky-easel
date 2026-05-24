@@ -158,3 +158,31 @@ export type FirmwareAdmin = {
   frames: Frame[];
   releases: FirmwareRelease[];
 };
+
+export type WifiCredential = {
+  ssid: string;
+  password: string;
+};
+
+export type FrameConfigurationReport = {
+  status: "available" | "applied" | "error";
+  message: string | null;
+  wifi_credentials: WifiCredential[];
+  active_wifi_index: number;
+  server_url: string;
+  firmware_version: string | null;
+};
+
+export type FrameConfigurationDesired = {
+  wifi_credentials: WifiCredential[];
+  active_wifi_index: number;
+  server_url: string;
+};
+
+export type FrameConfigurationSession = {
+  state: "idle" | "pending" | "connected" | "applying" | "applied" | "error" | "cancelled";
+  observed: FrameConfigurationReport | null;
+  message: string | null;
+  updated_at: string;
+  releases: FirmwareRelease[];
+};

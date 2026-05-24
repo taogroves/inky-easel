@@ -116,6 +116,70 @@ def draw_error_screen(graphics, width, height, message):
     graphics.text(message, (width - msg_w) // 2, height // 2 - 12, width, 3)
 
 
+def draw_configuration_screen(graphics, width, height, status="listening"):
+    graphics.set_pen(WHITE)
+    graphics.clear()
+    graphics.set_font("bitmap8")
+
+    graphics.set_pen(BLUE)
+    graphics.rectangle(0, 0, width, 64)
+    graphics.set_pen(WHITE)
+    title = "CONFIGURATION MODE"
+    title_w = graphics.measure_text(title, 4)
+    graphics.text(title, (width - title_w) // 2, 16, width, 4)
+
+    graphics.set_pen(BLACK)
+    body = "Keep this frame powered on while the portal sends changes."
+    _wrap_text(graphics, body, 32, 110, width - 64, 3, 6)
+    graphics.set_pen(BLUE)
+    status_text = "Status: {}".format(status)
+    status_w = graphics.measure_text(status_text, 3)
+    graphics.text(status_text, (width - status_w) // 2, height - 96, width, 3)
+
+
+def draw_wifi_selection_screen(graphics, width, height, credentials):
+    graphics.set_pen(WHITE)
+    graphics.clear()
+    graphics.set_font("bitmap8")
+
+    graphics.set_pen(RED)
+    graphics.rectangle(0, 0, width, 64)
+    graphics.set_pen(WHITE)
+    title = "WI-FI UNAVAILABLE"
+    title_w = graphics.measure_text(title, 4)
+    graphics.text(title, (width - title_w) // 2, 16, width, 4)
+
+    graphics.set_pen(BLACK)
+    _wrap_text(
+        graphics,
+        "Press a lower button to switch networks, then the frame will try again.",
+        28,
+        104,
+        width - 56,
+        3,
+        6,
+    )
+
+    labels = ["A", "B", "C", "D", "E"]
+    slot_w = width // 5
+    y = height - 116
+    for idx in range(5):
+        x = idx * slot_w
+        graphics.set_pen(BLACK)
+        graphics.rectangle(x + 6, y, slot_w - 12, 4)
+        graphics.set_pen(BLUE if idx < len(credentials) else BLACK)
+        graphics.text(labels[idx], x + 14, y + 18, slot_w - 20, 3)
+        graphics.set_pen(BLACK)
+        ssid = ""
+        if idx < len(credentials):
+            ssid = str(credentials[idx].get("ssid") or "")
+            if len(ssid) > 13:
+                ssid = ssid[:12] + "."
+        else:
+            ssid = "-"
+        graphics.text(ssid, x + 14, y + 54, slot_w - 20, 2)
+
+
 def _wrap_text(graphics, text, x, y, max_w, scale, spacing):
     if not text:
         return

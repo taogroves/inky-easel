@@ -39,6 +39,7 @@ FIRMWARE_FILES = [
     "battery.py",
     "display.py",
     "inky_helper.py",
+    "wifi_config.py",
 ]
 
 
@@ -179,6 +180,19 @@ async def latest_active_release() -> FirmwareReleaseDoc | None:
         return None
     except PyMongoError as e:
         log.warning("Firmware database active-release lookup failed: %s", e)
+        raise HTTPException(503, f"Firmware database unavailable: {e}")
+
+
+async def get_release(release_id: str) -> FirmwareReleaseDoc | None:
+    def _get() -> FirmwareReleaseDoc | None:
+        return _release_from_doc(_collection().find_one({"id": release_id}))
+
+    try:
+        return await asyncio.to_thread(_get)
+    except RuntimeError:
+        return None
+    except PyMongoError as e:
+        log.warning("Firmware database release lookup failed: %s", e)
         raise HTTPException(503, f"Firmware database unavailable: {e}")
 
 

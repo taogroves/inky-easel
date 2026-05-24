@@ -29,15 +29,24 @@ class ApiModel(BaseModel):
 # ---------- Frame protocol ----------
 
 
-class FramePollRequest(ApiModel):
-    frame_id: str
-    secret: str
-    server_url: Optional[str] = None
-    battery_voltage: float = 0.0
-    battery_percent: int = 0
-    wakeup: Literal["rtc", "button", "power"] = "rtc"
-    has_sd_card: Optional[bool] = None
+class WifiCredential(ApiModel):
+    ssid: str = Field(..., min_length=1, max_length=64)
+    password: str = Field(default="", max_length=128)
+
+
+class FrameConfigurationReport(ApiModel):
+    status: Literal["available", "applied", "error"] = "available"
+    message: Optional[str] = None
+    wifi_credentials: list[WifiCredential] = Field(default_factory=list, max_length=5)
+    active_wifi_index: int = Field(0, ge=0, le=4)
+    server_url: str = Field("", max_length=256)
     firmware_version: Optional[str] = None
+
+
+class FrameConfigurationDesired(ApiModel):
+    wifi_credentials: list[WifiCredential] = Field(default_factory=list, min_length=1, max_length=5)
+    active_wifi_index: int = Field(0, ge=0, le=4)
+    server_url: str = Field(..., min_length=1, max_length=256)
 
 
 class FirmwareUpdateFile(ApiModel):
@@ -51,6 +60,25 @@ class FirmwareUpdatePayload(ApiModel):
     version: str
     release_id: str
     files: list[FirmwareUpdateFile]
+
+
+class FrameConfigurationCommand(ApiModel):
+    mode: Literal["enter", "apply", "cancel"]
+    poll_seconds: int = 5
+    config: Optional[FrameConfigurationDesired] = None
+    firmware_update: Optional[FirmwareUpdatePayload] = None
+
+
+class FramePollRequest(ApiModel):
+    frame_id: str
+    secret: str
+    server_url: Optional[str] = None
+    battery_voltage: float = 0.0
+    battery_percent: int = 0
+    wakeup: Literal["rtc", "button", "power"] = "rtc"
+    has_sd_card: Optional[bool] = None
+    firmware_version: Optional[str] = None
+    configuration_status: Optional[FrameConfigurationReport] = None
 
 
 class TextPayload(ApiModel):
@@ -72,6 +100,7 @@ class FramePollResponse(ApiModel):
     text: Optional[TextPayload] = None
     plugin: Optional[PluginPayload] = None
     firmware_update: Optional[FirmwareUpdatePayload] = None
+    configuration: Optional[FrameConfigurationCommand] = None
     sleep_minutes: int = 60
     low_battery_warning: bool = False
 
@@ -246,3 +275,16 @@ class FirmwareReleaseOut(ApiModel):
 class FirmwareAdminOut(ApiModel):
     frames: list[FrameOut]
     releases: list[FirmwareReleaseOut]
+
+
+class FrameConfigurationSave(ApiModel):
+    config: FrameConfigurationDesired
+    firmware_release_id: Optional[str] = None
+
+
+class FrameConfigurationSessionOut(ApiModel):
+    state: Literal["idle", "pending", "connected", "applying", "applied", "error", "cancelled"]
+    observed: Optional[FrameConfigurationReport] = None
+    message: Optional[str] = None
+    updated_at: datetime
+    releases: list[FirmwareReleaseOut] = Field(default_factory=list)

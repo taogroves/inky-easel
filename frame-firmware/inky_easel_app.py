@@ -24,6 +24,7 @@ import inky_helper as ih
 import battery
 import display as scene
 import frame_client
+import wifi_config
 
 try:
     from firmware_version import FIRMWARE_VERSION
@@ -95,8 +96,63 @@ def _reset_cleanly():
     machine.reset()
 
 
+BUTTONS = (
+    inky_frame.button_a,
+    inky_frame.button_b,
+    inky_frame.button_c,
+    inky_frame.button_d,
+    inky_frame.button_e,
+)
+WIFI_SELECTION_MARKER = "/sd/_wifi_select_mode"
 WIFI_CONNECT_ATTEMPTS = 3
 WIFI_CONNECT_RETRY_SEC = 2
+
+
+def _button_wake_index():
+    for idx, button in enumerate(BUTTONS):
+        try:
+            if button.raw():
+                return idx
+        except Exception:
+            pass
+    return None
+
+
+def _wifi_selection_pending():
+    try:
+        os.stat(WIFI_SELECTION_MARKER)
+        return True
+    except OSError:
+        return False
+
+
+def _mark_wifi_selection_pending():
+    try:
+        with open(WIFI_SELECTION_MARKER, "w") as f:
+            f.write("1")
+            f.flush()
+    except OSError as e:
+        print("Could not mark Wi-Fi selection mode:", e)
+
+
+def _clear_wifi_selection_pending():
+    try:
+        os.remove(WIFI_SELECTION_MARKER)
+    except OSError:
+        pass
+
+
+def _maybe_switch_wifi_from_button(wakeup):
+    if wakeup != "button" or not _wifi_selection_pending():
+        return
+    idx = _button_wake_index()
+    _clear_wifi_selection_pending()
+    credentials = wifi_config.get_credentials()
+    if idx is None or idx >= len(credentials):
+        print("Button wake did not match a configured Wi-Fi slot")
+        return
+    wifi_config.set_active_wifi_index(idx)
+    print("Selected Wi-Fi slot", idx + 1, credentials[idx].get("ssid"))
 
 
 def _reset_wifi():
@@ -111,11 +167,14 @@ def _reset_wifi():
     time.sleep_ms(200)
 
 
-def _connect_wifi():
-    try:
-        from secrets import WIFI_PASSWORD, WIFI_SSID
-    except ImportError:
-        print("Missing secrets.py")
+def _connect_wifi(credential):
+    if not credential:
+        print("Missing Wi-Fi credentials")
+        return False
+    ssid = credential.get("ssid")
+    password = credential.get("password") or ""
+    if not ssid:
+        print("Missing Wi-Fi SSID")
         return False
 
     import network
@@ -125,7 +184,7 @@ def _connect_wifi():
         if attempt > 1:
             _reset_wifi()
         print("Wi-Fi attempt {}/{}".format(attempt, WIFI_CONNECT_ATTEMPTS))
-        ih.network_connect(WIFI_SSID, WIFI_PASSWORD)
+        ih.network_connect(ssid, password)
         if network.WLAN(network.STA_IF).isconnected():
             ih.sync_rtc_time()
             return True
@@ -180,10 +239,9 @@ def _render_with_battery(graphics, width, height, response, voltage, percent):
 
 def _scheduled_refresh(graphics, width, height, server_url, frame_id,
                        frame_secret, default_sleep_minutes, voltage, percent,
-                       wakeup, has_sd_card=False):
-    if not _connect_wifi():
-        _show_error(graphics, width, height, "Wi-Fi unavailable")
-        return None, 1, False
+                       wakeup, has_sd_card=False, credential=None):
+    if not _connect_wifi(credential):
+        return None, 0, False, "wifi"
 
     try:
         ih.network_led(100)
@@ -198,9 +256,12 @@ def _scheduled_refresh(graphics, width, height, server_url, frame_id,
             _show_error(graphics, width, height, "Bad server response")
         else:
             _show_error(graphics, width, height, "Server unreachable")
-        return None, 1, False
+        return None, 1, False, "poll"
     finally:
         ih.stop_network_led()
+
+    if response.get("configuration"):
+        return response, 0, True, "configuration"
 
     update = response.get("firmware_update")
     if update:
@@ -215,25 +276,144 @@ def _scheduled_refresh(graphics, width, height, server_url, frame_id,
             ih.stop_firmware_update_leds()
             print("Firmware update failed:", e)
             _show_error(graphics, width, height, "Firmware update failed")
-            return None, 1, False
+            return None, 1, False, "firmware"
 
     try:
         _render_with_battery(graphics, width, height, response, voltage, percent)
     except Exception as e:
         print("Render failed:", e)
         _show_error(graphics, width, height, "Render failed")
-        return None, 1, False
+        return None, 1, False, "render"
 
     _update_display(graphics)
     gc.collect()
     sleep_minutes = int(response.get("sleep_minutes") or default_sleep_minutes)
     print("Server requested sleep_minutes =", sleep_minutes)
-    return response, sleep_minutes, True
+    return response, sleep_minutes, True, "ok"
 
 
 def _show_error(graphics, width, height, message):
     scene.draw_error_screen(graphics, width, height, message)
     _update_display(graphics)
+
+
+def _show_wifi_selection_and_sleep(graphics, width, height, voltage):
+    credentials = wifi_config.get_credentials()
+    scene.draw_wifi_selection_screen(graphics, width, height, credentials)
+    _update_display(graphics)
+    _mark_wifi_selection_pending()
+    ih.all_leds_off()
+    for idx, button in enumerate(BUTTONS):
+        if idx < len(credentials):
+            button.led_on()
+    if ih.is_usb_power(voltage):
+        print("USB power: waiting forever for Wi-Fi selection button")
+        while True:
+            for idx, button in enumerate(BUTTONS):
+                if idx < len(credentials) and button.read():
+                    wifi_config.set_active_wifi_index(idx)
+                    _clear_wifi_selection_pending()
+                    _reset_cleanly()
+            time.sleep_ms(100)
+    print("Battery power: turning off until a button selects Wi-Fi")
+    inky_frame.turn_off()
+    while True:
+        time.sleep(60)
+
+
+def _configuration_status(status="available", message=None):
+    config = wifi_config.load()
+    return {
+        "status": status,
+        "message": message,
+        "wifi_credentials": config.get("wifi_credentials") or [],
+        "active_wifi_index": int(config.get("active_wifi_index") or 0),
+        "server_url": config.get("server_url") or "",
+        "firmware_version": FIRMWARE_VERSION,
+    }
+
+
+def _apply_configuration(command):
+    desired = command.get("config") or {}
+    wifi_config.update(
+        server_url=desired.get("server_url"),
+        wifi_credentials=desired.get("wifi_credentials"),
+        active_wifi_index=desired.get("active_wifi_index"),
+    )
+    update = command.get("firmware_update")
+    if update:
+        import firmware_updater
+
+        ih.pulse_firmware_update_leds()
+        try:
+            firmware_updater.apply_update(update, current_version=FIRMWARE_VERSION)
+        finally:
+            ih.stop_firmware_update_leds()
+
+
+def _configuration_loop(graphics, width, height, server_url, frame_id, frame_secret,
+                        voltage, percent, has_sd_card=False):
+    scene.draw_configuration_screen(graphics, width, height, "listening")
+    _update_display(graphics)
+    ih.pulse_configuration_mode_leds()
+    status = _configuration_status("available")
+
+    while True:
+        time.sleep(5)
+        try:
+            voltage, percent = battery.read()
+        except Exception:
+            pass
+        try:
+            response = frame_client.poll(
+                server_url,
+                frame_id,
+                frame_secret,
+                voltage,
+                percent,
+                "power",
+                has_sd_card=has_sd_card,
+                firmware_version=FIRMWARE_VERSION,
+                configuration_status=status,
+            )
+        except frame_client.PollError as e:
+            print("Configuration poll failed:", e)
+            continue
+
+        command = response.get("configuration") or {}
+        mode = command.get("mode")
+        if mode == "cancel":
+            scene.draw_configuration_screen(graphics, width, height, "cancelled")
+            _update_display(graphics)
+            _reset_cleanly()
+        if mode != "apply":
+            continue
+
+        try:
+            scene.draw_configuration_screen(graphics, width, height, "saving")
+            _update_display(graphics)
+            _apply_configuration(command)
+            status = _configuration_status("applied", "Configuration saved")
+            frame_client.poll(
+                server_url,
+                frame_id,
+                frame_secret,
+                voltage,
+                percent,
+                "power",
+                has_sd_card=has_sd_card,
+                firmware_version=FIRMWARE_VERSION,
+                configuration_status=status,
+            )
+            scene.draw_configuration_screen(graphics, width, height, "saved")
+            _update_display(graphics)
+            time.sleep(1)
+            _reset_cleanly()
+        except Exception as e:
+            print("Configuration apply failed:", e)
+            status = _configuration_status("error", str(e))
+            scene.draw_configuration_screen(graphics, width, height, "error")
+            _update_display(graphics)
 
 
 def main():
@@ -268,14 +448,28 @@ def main():
         return
 
     wakeup = _wakeup_reason()
+    _maybe_switch_wifi_from_button(wakeup)
 
-    response, sleep_minutes, ok = _scheduled_refresh(
-        graphics, width, height, SERVER_URL, FRAME_ID, FRAME_SECRET,
+    server_url = wifi_config.get_server_url() or SERVER_URL
+    credential = wifi_config.get_active_credential()
+
+    response, sleep_minutes, ok, status = _scheduled_refresh(
+        graphics, width, height, server_url, FRAME_ID, FRAME_SECRET,
         DEFAULT_SLEEP_MINUTES, voltage, percent, wakeup, has_sd_card=sd_ok,
+        credential=credential,
     )
 
     if not ok:
+        if status == "wifi":
+            _show_wifi_selection_and_sleep(graphics, width, height, voltage)
+            return
         _deep_sleep(1, voltage=voltage)
+        return
+    if status == "configuration":
+        _configuration_loop(
+            graphics, width, height, server_url, FRAME_ID, FRAME_SECRET,
+            voltage, percent, has_sd_card=sd_ok,
+        )
         return
     _deep_sleep(sleep_minutes, voltage=voltage)
 

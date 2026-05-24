@@ -7,7 +7,8 @@ Protocol (POST /api/frame/poll):
                "battery_voltage": float, "battery_percent": int,
                "wakeup": "rtc"|"button"|"power",
                "has_sd_card": bool,
-               "firmware_version": str }
+               "firmware_version": str,
+               "configuration_status": dict | null }
 
   response = { "type": "image"|"text"|"plugin"|"sleep",
                "image_url": str | null,
@@ -18,6 +19,7 @@ Protocol (POST /api/frame/poll):
                "firmware_update": { "version": str, "release_id": str,
                                      "files": list } | null,
                "sleep_minutes": int,
+               "configuration": dict | null,
                "low_battery_warning": bool }
 """
 
@@ -103,7 +105,7 @@ def _http_post_json(url, payload):
 
 
 def poll(server_url, frame_id, secret, battery_voltage, battery_percent, wakeup,
-         has_sd_card=False, firmware_version=None):
+         has_sd_card=False, firmware_version=None, configuration_status=None):
     url = server_url.rstrip("/") + "/api/frame/poll"
     payload = {
         "frame_id": frame_id,
@@ -114,6 +116,7 @@ def poll(server_url, frame_id, secret, battery_voltage, battery_percent, wakeup,
         "wakeup": wakeup,
         "has_sd_card": bool(has_sd_card),
         "firmware_version": firmware_version,
+        "configuration_status": configuration_status,
     }
     try:
         return _http_post_json(url, payload)

@@ -28,6 +28,8 @@ network_led_timer = Timer(-1)
 network_led_pulse_speed_hz = 1
 firmware_led_timer = Timer(-1)
 firmware_led_phase = 0
+configuration_led_timer = Timer(-1)
+configuration_led_phase = 0
 
 
 def network_led_callback(_t):
@@ -49,6 +51,23 @@ def firmware_led_callback(_t):
         warn_led(False)
 
 
+def configuration_led_callback(_t):
+    global configuration_led_phase
+    configuration_led_phase = (configuration_led_phase + 1) % 2
+    if configuration_led_phase:
+        try:
+            inky_frame.led_busy.on()
+        except AttributeError:
+            pass
+        network_led(0)
+    else:
+        try:
+            inky_frame.led_busy.off()
+        except AttributeError:
+            pass
+        network_led(80)
+
+
 # set the network led into pulsing mode
 def pulse_network_led(speed_hz=1):
     global network_led_timer, network_led_pulse_speed_hz
@@ -66,6 +85,7 @@ def stop_network_led():
 
 def pulse_firmware_update_leds():
     global firmware_led_phase
+    stop_configuration_mode_leds()
     stop_network_led()
     firmware_led_phase = 0
     firmware_led_timer.deinit()
@@ -78,11 +98,30 @@ def stop_firmware_update_leds():
     warn_led(False)
 
 
+def pulse_configuration_mode_leds():
+    global configuration_led_phase
+    stop_firmware_update_leds()
+    stop_network_led()
+    configuration_led_phase = 0
+    configuration_led_timer.deinit()
+    configuration_led_timer.init(period=500, mode=Timer.PERIODIC, callback=configuration_led_callback)
+
+
+def stop_configuration_mode_leds():
+    configuration_led_timer.deinit()
+    network_led_pwm.duty_u16(0)
+    try:
+        inky_frame.led_busy.off()
+    except AttributeError:
+        pass
+
+
 def warn_led(on):
     led_warn.value(1 if on else 0)
 
 
 def all_leds_off():
+    stop_configuration_mode_leds()
     stop_firmware_update_leds()
     stop_network_led()
     warn_led(False)

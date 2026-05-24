@@ -19,6 +19,7 @@ requested duration.
 | `battery.py` | VSYS ADC sampling and percent conversion. |
 | `display.py` | Battery overlay, critical-battery screen, text rendering. |
 | `inky_helper.py` | Wi-Fi connect, helpers (lifted from Pimoroni examples). |
+| `wifi_config.py` | SD-card Wi-Fi credential list and API server settings. |
 | `secrets.py.template` | Replace with your Wi-Fi credentials before deploy. |
 | `frame_config.py.template` | Replace with your `FRAME_ID` / `FRAME_SECRET` / `SERVER_URL`. |
 
@@ -39,12 +40,19 @@ checks their SHA-256 hashes, backs up the previous SD files under
 ## How the portal deploys this
 
 The Next.js portal renders the setup wizard, generates a per-frame
-`frame_config.py` and `secrets.py`, then uses the browser's File System Access
-API to write the SD bundle onto a directory the user selects (the mounted SD
-card). The bundle includes `inky_easel_app.py`, helper modules, generated
+`frame_config.py`, legacy-compatible `secrets.py`, and
+`inky_easel_config.json`, then uses the browser's File System Access API to
+write the SD bundle onto a directory the user selects (the mounted SD card).
+The bundle includes `inky_easel_app.py`, helper modules, generated
 configuration, and a compatibility `main.py` wrapper. The fallback path is a ZIP
 download labeled "Inky Easel SD bundle - extract everything to a freshly
 FAT32-formatted card".
+
+After first setup, the frame dashboard can put a checked-in frame into
+configuration mode. The frame reports its SD-card Wi-Fi list, server URL, and
+firmware version, accepts edited settings, confirms the final write, then
+reboots. Wi-Fi passwords are only kept in the server's in-memory configuration
+session during that handshake.
 
 You do **not** need to flash a custom UF2; the stock Pimoroni Inky Frame
 MicroPython build with the `-with-examples` package is sufficient.
