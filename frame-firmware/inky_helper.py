@@ -26,6 +26,8 @@ def network_led(brightness):
 
 network_led_timer = Timer(-1)
 network_led_pulse_speed_hz = 1
+firmware_led_timer = Timer(-1)
+firmware_led_phase = 0
 
 
 def network_led_callback(_t):
@@ -33,6 +35,18 @@ def network_led_callback(_t):
     brightness = (math.sin(time.ticks_ms() * math.pi * 2 / (1000 / network_led_pulse_speed_hz)) * 40) + 60
     value = int(pow(brightness / 100.0, 2.8) * 65535.0 + 0.5)
     network_led_pwm.duty_u16(value)
+
+
+def firmware_led_callback(_t):
+    global firmware_led_phase
+    firmware_led_phase = (firmware_led_phase + 1) % 20
+    on = firmware_led_phase < 10
+    if on:
+        network_led(85)
+        warn_led(True)
+    else:
+        network_led(15)
+        warn_led(False)
 
 
 # set the network led into pulsing mode
@@ -50,11 +64,26 @@ def stop_network_led():
     network_led_pwm.duty_u16(0)
 
 
+def pulse_firmware_update_leds():
+    global firmware_led_phase
+    stop_network_led()
+    firmware_led_phase = 0
+    firmware_led_timer.deinit()
+    firmware_led_timer.init(period=120, mode=Timer.PERIODIC, callback=firmware_led_callback)
+
+
+def stop_firmware_update_leds():
+    firmware_led_timer.deinit()
+    network_led_pwm.duty_u16(0)
+    warn_led(False)
+
+
 def warn_led(on):
     led_warn.value(1 if on else 0)
 
 
 def all_leds_off():
+    stop_firmware_update_leds()
     stop_network_led()
     warn_led(False)
     clear_button_leds()

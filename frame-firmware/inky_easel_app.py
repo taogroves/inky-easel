@@ -207,10 +207,12 @@ def _scheduled_refresh(graphics, width, height, server_url, frame_id,
         try:
             import firmware_updater
 
+            ih.pulse_firmware_update_leds()
             firmware_updater.apply_update(update, current_version=FIRMWARE_VERSION)
             print("Resetting into updated firmware")
             _reset_cleanly()
         except Exception as e:
+            ih.stop_firmware_update_leds()
             print("Firmware update failed:", e)
             _show_error(graphics, width, height, "Firmware update failed")
             return None, 1, False
