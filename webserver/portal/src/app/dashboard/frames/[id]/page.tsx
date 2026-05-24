@@ -6,6 +6,7 @@ import EditFrameForm from "@/components/EditFrameForm";
 import DangerZone from "@/components/DangerZone";
 import { auth } from "@/lib/auth";
 import { ApiError, api, type FrameWithSecret } from "@/lib/api";
+import { getDeveloperMode } from "@/lib/developer-mode";
 import { formatDateTime } from "@/lib/time";
 
 function statusLabel(status: FrameWithSecret["connection_status"]): string {
@@ -16,7 +17,7 @@ function statusLabel(status: FrameWithSecret["connection_status"]): string {
 export default async function FrameDetailPage(props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
   const session = await auth.api.getSession({ headers: await headers() }).catch(() => null);
-  const developerMode = Boolean(session?.user.developerMode);
+  const developerMode = session?.user ? await getDeveloperMode(session.user.id) : false;
   let frame: FrameWithSecret;
   try {
     frame = await api<FrameWithSecret>(`/api/frames/${id}`);

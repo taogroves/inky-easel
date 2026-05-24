@@ -47,7 +47,6 @@ class User(Base):
     emailVerified: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
     name: Mapped[Optional[str]] = mapped_column(String(255))
     image: Mapped[Optional[str]] = mapped_column(Text)
-    developerMode: Mapped[bool] = mapped_column(Boolean, default=False)
     createdAt: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updatedAt: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
@@ -98,6 +97,16 @@ class AuthVerification(Base):
     expiresAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     createdAt: Mapped[Optional[datetime]] = mapped_column(DateTime, server_default=func.now())
     updatedAt: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class UserSettings(Base):
+    __tablename__ = "ie_user_settings"
+
+    user_id: Mapped[str] = mapped_column(String(64), ForeignKey("user.id", ondelete="CASCADE"), primary_key=True)
+    developer_mode: Mapped[bool] = mapped_column(Boolean, default=False)
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
     )
 

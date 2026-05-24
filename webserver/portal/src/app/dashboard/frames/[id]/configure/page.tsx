@@ -5,11 +5,12 @@ import { notFound } from "next/navigation";
 import FrameConfigureClient from "@/components/FrameConfigureClient";
 import { auth } from "@/lib/auth";
 import { ApiError, api, type FrameConfigurationSession, type FrameWithSecret } from "@/lib/api";
+import { getDeveloperMode } from "@/lib/developer-mode";
 
 export default async function FrameConfigurePage(props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
   const userSession = await auth.api.getSession({ headers: await headers() }).catch(() => null);
-  const developerMode = Boolean(userSession?.user.developerMode);
+  const developerMode = userSession?.user ? await getDeveloperMode(userSession.user.id) : false;
   let frame: FrameWithSecret;
   let session: FrameConfigurationSession;
   try {

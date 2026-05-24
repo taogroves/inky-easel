@@ -5,11 +5,12 @@ import { notFound } from "next/navigation";
 import SetupWizard from "@/components/SetupWizard";
 import { auth } from "@/lib/auth";
 import { ApiError, api, type FrameWithSecret } from "@/lib/api";
+import { getDeveloperMode } from "@/lib/developer-mode";
 
 export default async function SetupPage(props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
   const session = await auth.api.getSession({ headers: await headers() }).catch(() => null);
-  const developerMode = Boolean(session?.user.developerMode);
+  const developerMode = session?.user ? await getDeveloperMode(session.user.id) : false;
   let frame: FrameWithSecret;
   try {
     frame = await api<FrameWithSecret>(`/api/frames/${id}`);

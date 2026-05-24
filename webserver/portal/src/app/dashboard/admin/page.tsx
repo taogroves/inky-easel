@@ -11,6 +11,7 @@ import {
 } from "@/lib/admin-auth";
 import { auth } from "@/lib/auth";
 import { api, type FirmwareAdmin, type Frame } from "@/lib/api";
+import { getDeveloperMode } from "@/lib/developer-mode";
 import { formatDateTime, parseApiDate } from "@/lib/time";
 
 function relativeTime(iso: string | null): string {
@@ -77,7 +78,7 @@ export default async function AdminPage(props: { searchParams: Promise<{ error?:
   const { error } = await props.searchParams;
   const session = await auth.api.getSession({ headers: await headers() }).catch(() => null);
   if (!session?.user) redirect("/sign-in");
-  if (!session.user.developerMode) redirect("/dashboard");
+  if (!(await getDeveloperMode(session.user.id))) redirect("/dashboard");
 
   if (!isAdminPasswordConfigured()) {
     return (

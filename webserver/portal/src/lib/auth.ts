@@ -19,6 +19,7 @@ async function deletePortalUserData(userId: string) {
 
     await tx.delete(schema.inboxItem).where(eq(schema.inboxItem.senderUserId, userId));
     await tx.delete(schema.plugin).where(eq(schema.plugin.userId, userId));
+    await tx.delete(schema.userSettings).where(eq(schema.userSettings.userId, userId)).catch(() => undefined);
   });
 }
 
@@ -36,13 +37,6 @@ export const auth = betterAuth({
     minPasswordLength: 8,
   },
   user: {
-    additionalFields: {
-      developerMode: {
-        type: "boolean",
-        required: false,
-        defaultValue: false,
-      },
-    },
     deleteUser: {
       enabled: true,
       beforeDelete: async (user) => {

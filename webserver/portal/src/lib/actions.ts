@@ -9,7 +9,8 @@ import { requireAdminDashboardAccess } from "@/lib/admin-auth";
 import { auth } from "@/lib/auth";
 import { api, ApiError, type FirmwareRelease, type FrameWithSecret, type InboxItem, type Plugin, type ScheduleItem, type SetupBundle } from "@/lib/api";
 import { db } from "@/lib/db/client";
-import { user } from "@/lib/db/schema";
+import { ensureUserSettingsTable, getDeveloperMode } from "@/lib/developer-mode";
+import { user, userSettings } from "@/lib/db/schema";
 
 export type ActionResult<T = undefined> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -41,15 +42,20 @@ export async function updateAccountAction(formData: FormData): Promise<ActionRes
     const currentUser = await requireCurrentUser();
     const name = String(formData.get("name") ?? "").trim();
     if (!name) return { ok: false, error: "Username is required." };
+    const developerMode = formData.getAll("developerMode").includes("on");
 
     await db
       .update(user)
       .set({
         name,
-        developerMode: formData.getAll("developerMode").includes("on"),
         updatedAt: new Date(),
       })
       .where(eq(user.id, currentUser.id));
+    await ensureUserSettingsTable();
+    await db
+      .insert(userSettings)
+      .values({ userId: currentUser.id, developerMode, updatedAt: new Date() })
+      .onDuplicateKeyUpdate({ set: { developerMode, updatedAt: new Date() } });
 
     revalidatePath("/");
     revalidatePath("/account");
@@ -253,7 +259,7 @@ export async function createFirmwareReleaseAction(formData: FormData): Promise<A
   try {
     await requireAdminDashboardAccess();
     const currentUser = await requireCurrentUser();
-    if (!currentUser.developerMode) throw new Error("Developer mode required");
+    if (!(await getDeveloperMode(currentUser.id))) throw new Error("Developer mode required");
     const release = await api<FirmwareRelease>("/api/firmware/releases", {
       method: "POST",
       body: JSON.stringify({
@@ -274,7 +280,7 @@ export async function activateFirmwareReleaseAction(releaseId: string): Promise<
   try {
     await requireAdminDashboardAccess();
     const currentUser = await requireCurrentUser();
-    if (!currentUser.developerMode) throw new Error("Developer mode required");
+    if (!(await getDeveloperMode(currentUser.id))) throw new Error("Developer mode required");
     const release = await api<FirmwareRelease>(`/api/firmware/releases/${releaseId}/activate`, { method: "POST" });
     revalidatePath("/dashboard/admin");
     return { ok: true, data: release };

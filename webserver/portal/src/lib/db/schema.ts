@@ -47,7 +47,6 @@ export const user = mysqlTable("user", {
   emailVerified: boolean("emailVerified").default(false),
   name: varchar("name", { length: 255 }),
   image: text("image"),
-  developerMode: boolean("developerMode").default(false).notNull(),
   createdAt: datetime("createdAt").notNull(),
   updatedAt: datetime("updatedAt").notNull(),
 });
@@ -89,6 +88,12 @@ export const verification = mysqlTable("verification", {
 });
 
 // ---------- Portal-owned tables (mirrored by FastAPI / SQLAlchemy) ----------
+
+export const userSettings = mysqlTable("ie_user_settings", {
+  userId: varchar("user_id", { length: 64 }).primaryKey(),
+  developerMode: boolean("developer_mode").default(false).notNull(),
+  updatedAt: datetime("updated_at").notNull(),
+});
 
 export const frame = mysqlTable(
   "ie_frame",

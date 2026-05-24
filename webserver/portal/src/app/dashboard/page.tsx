@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
 import { api, type Frame } from "@/lib/api";
+import { getDeveloperMode } from "@/lib/developer-mode";
 import { parseApiDate } from "@/lib/time";
 
 function batteryBadge(pct: number | null): { label: string; cls: string } {
@@ -50,7 +51,7 @@ function connectionBadge(frame: Frame): { label: string; dot: string; cls: strin
 export default async function DashboardPage() {
   const session = await auth.api.getSession({ headers: await headers() }).catch(() => null);
   if (!session?.user) redirect("/sign-in");
-  const developerMode = Boolean(session.user.developerMode);
+  const developerMode = await getDeveloperMode(session.user.id);
 
   let frames: Frame[] = [];
   try {
