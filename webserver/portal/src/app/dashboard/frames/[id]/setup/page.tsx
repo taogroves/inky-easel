@@ -21,8 +21,8 @@ export default async function SetupPage(props: { params: Promise<{ id: string }>
       </Link>
       <h1 className="mt-3 font-display text-3xl">SD card setup</h1>
       <p className="mt-2 max-w-prose text-sm text-ink-soft">
-        Follow the wizard to prepare a microSD card for <strong>{frame.display_name}</strong>.
-        You can re-run this any time you want to change Wi-Fi credentials or replace the card.
+        Follow these steps to prepare a microSD card for <strong>{frame.display_name}</strong>.
+        You can re-run this any time you want to change Wi-Fi details or replace the card.
       </p>
       <SetupWizard frame={frame} />
     </div>

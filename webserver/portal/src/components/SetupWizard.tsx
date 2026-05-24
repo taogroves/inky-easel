@@ -171,8 +171,11 @@ export default function SetupWizard({ frame: initialFrame }: { frame: FrameWithS
         onEnter={() => setStep("wifi")}
       >
         <div className="space-y-3">
+          <p className="mt-2 max-w-prose text-sm text-ink-soft">
+            Enter your Wi-Fi network name and password. This lets your frame access the internet.
+          </p>
           <div>
-            <label className="label" htmlFor="ssid">SSID</label>
+            <label className="label" htmlFor="ssid">Network name</label>
             <input id="ssid" className="input" value={ssid} onChange={(e) => setSsid(e.target.value)} placeholder="MyHomeNet" />
           </div>
           <div>
@@ -183,7 +186,7 @@ export default function SetupWizard({ frame: initialFrame }: { frame: FrameWithS
             </p>
           </div>
           <div>
-            <label className="label" htmlFor="server-url">Frame server URL</label>
+            <label className="label" htmlFor="server-url">Frame server URL (Optional)</label>
             <input
               id="server-url"
               className="input"
@@ -193,7 +196,7 @@ export default function SetupWizard({ frame: initialFrame }: { frame: FrameWithS
               placeholder="http://192.168.1.42:8000"
             />
             <p className="mt-1 text-xs text-ink-soft">
-              Optional. Leave blank for the deployed <code>PUBLIC_BASE_URL</code>. For local hardware, use this computer&apos;s LAN IP and API port, not <code>localhost</code>.
+              Leave blank unless you know what you're doing. For local development, use the server&apos;s LAN IP and API port, not <code>localhost</code>.
             </p>
           </div>
           {error && <p className="text-sm text-red-700">{error}</p>}
@@ -220,13 +223,13 @@ export default function SetupWizard({ frame: initialFrame }: { frame: FrameWithS
         ) : (
           <div className="space-y-3">
             <p className="text-sm text-ink-soft">
-              This bundle configures the frame to poll <code>{bundle.server_url}</code>.
+              This bundle configures the frame to communicate and display content.
             </p>
-            <p className="text-sm text-ink-soft">
+            {/* <p className="text-sm text-ink-soft">
               On a new frame, first copy <code>flash_loader_main.py</code> to internal
               flash as <code>main.py</code>. After that one-time step, future setup
               bundles only need to be written to the SD card.
-            </p>
+            </p> */}
             <p className="text-sm text-ink-soft">
               Insert a FAT32-formatted microSD card into your computer. Then either:
             </p>
@@ -272,9 +275,8 @@ export default function SetupWizard({ frame: initialFrame }: { frame: FrameWithS
 
       <Step index={4} active={step === "verify"} title="Verify the frame connects" done={false} onEnter={() => setStep("verify")}>
         <p className="text-sm text-ink-soft">
-          Insert the SD card into your Inky Frame, make sure the one-time flash loader is installed,
-          then tap the reset button. The frame will wake up, phone home, and we&apos;ll show a
-          confirmation here.
+          Insert the SD card into your Inky Frame, then tap the reset button. The frame will wake up, 
+          phone home, and we&apos;ll show a confirmation here if it connects successfully.
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <button type="button" className="btn-primary" onClick={verifyConnection} disabled={verifyStatus === "polling"}>
