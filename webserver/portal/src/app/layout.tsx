@@ -7,7 +7,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Inky Easel",
-  description: "A portal for your Inky Frame e-paper display",
+  description: "A portal for battery-powered e-paper picture frames",
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
