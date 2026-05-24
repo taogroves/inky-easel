@@ -59,6 +59,39 @@ export async function api<T>(path: string, opts: FetchOpts = {}): Promise<T> {
   return (await resp.json()) as T;
 }
 
+export async function apiBinary(path: string, opts: FetchOpts = {}): Promise<{ data: ArrayBuffer; mime: string }> {
+  const headerBag: Record<string, string> = {
+    "X-Service-Auth": SERVICE_SECRET,
+  };
+  if (!opts.skipAuth) {
+    headerBag["X-User-Id"] = await userId();
+  }
+  const url = `${API_BASE}${path}`;
+  const resp = await fetch(url, {
+    ...opts,
+    headers: { ...headerBag, ...(opts.headers as Record<string, string> | undefined) },
+    cache: "no-store",
+  });
+
+  if (!resp.ok) {
+    let body: unknown;
+    try {
+      body = await resp.json();
+    } catch {
+      body = await resp.text().catch(() => "");
+    }
+    const message = typeof body === "object" && body && "detail" in body
+      ? String((body as { detail: unknown }).detail)
+      : `API ${resp.status}`;
+    throw new ApiError(resp.status, message, body);
+  }
+
+  return {
+    data: await resp.arrayBuffer(),
+    mime: resp.headers.get("content-type") ?? "application/octet-stream",
+  };
+}
+
 export const apiBase = API_BASE;
 export const apiServiceSecret = SERVICE_SECRET;
 

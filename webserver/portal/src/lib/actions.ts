@@ -7,7 +7,7 @@ import { eq } from "drizzle-orm";
 
 import { requireAdminDashboardAccess } from "@/lib/admin-auth";
 import { auth } from "@/lib/auth";
-import { api, ApiError, type FirmwareRelease, type FrameWithSecret, type InboxItem, type Plugin, type ScheduleItem, type SetupBundle } from "@/lib/api";
+import { ApiError, api, apiBinary, type FirmwareRelease, type FrameWithSecret, type InboxItem, type Plugin, type ScheduleItem, type SetupBundle } from "@/lib/api";
 import { db } from "@/lib/db/client";
 import { ensureUserSettingsTable, getDeveloperMode } from "@/lib/developer-mode";
 import { user, userSettings } from "@/lib/db/schema";
@@ -221,6 +221,36 @@ export async function sendMessageAction(payload: {
       body: JSON.stringify(payload),
     });
     return { ok: true, data: item };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function previewInboxItemAction(itemId: string): Promise<ActionResult<{ buffer: ArrayBuffer; mime: string }>> {
+  try {
+    const { data, mime } = await apiBinary(`/api/inbox/${itemId}/preview`);
+    return { ok: true, data: { buffer: data, mime } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function previewSendMessageAction(payload: {
+  recipient_frame_name: string;
+  kind: "text" | "image" | "link" | "drawing";
+  text_body?: string;
+  image_base64?: string;
+  image_mime?: string;
+  sender_label?: string;
+  inbox_password?: string;
+}): Promise<ActionResult<{ buffer: ArrayBuffer; mime: string }>> {
+  try {
+    const { data, mime } = await apiBinary("/api/inbox/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return { ok: true, data: { buffer: data, mime } };
   } catch (e) {
     return fail(e);
   }

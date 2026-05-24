@@ -1,9 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 
 import DrawingPad from "@/components/DrawingPad";
-import { sendMessageAction } from "@/lib/actions";
+import FrameContentPreview from "@/components/FrameContentPreview";
+import { previewSendMessageAction, sendMessageAction } from "@/lib/actions";
+
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 async function fileToBase64(file: File): Promise<string> {
   const buffer = await file.arrayBuffer();
@@ -23,38 +26,65 @@ export default function SendForm() {
   const [senderLabel, setSenderLabel] = useState("");
   const [inboxPassword, setInboxPassword] = useState("");
   const [pending, startTransition] = useTransition();
+  const [previewing, startPreview] = useTransition();
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewPayload, setPreviewPayload] = useState<Parameters<typeof sendMessageAction>[0] | null>(null);
+  const [previewKey, setPreviewKey] = useState(0);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setShowPreview(false);
+    setPreviewPayload(null);
+  }, [kind]);
+
+  async function buildPayload(): Promise<Parameters<typeof sendMessageAction>[0] | null> {
+    const payload: Parameters<typeof sendMessageAction>[0] = {
+      recipient_frame_name: recipient.trim().toLowerCase(),
+      kind,
+      sender_label: senderLabel || undefined,
+      inbox_password: inboxPassword || undefined,
+    };
+    if (kind === "text") {
+      if (!text.trim()) {
+        setError("Enter a message first.");
+        return null;
+      }
+      payload.text_body = text;
+    } else if (kind === "link") {
+      if (!link.trim()) {
+        setError("Enter a link first.");
+        return null;
+      }
+      payload.text_body = link;
+    } else if (kind === "drawing") {
+      if (!drawingBase64) {
+        setError("Draw something first.");
+        return null;
+      }
+      payload.image_base64 = drawingBase64;
+      payload.image_mime = "image/png";
+    } else if (file) {
+      if (file.size > MAX_IMAGE_BYTES) {
+        setError("Image must be 5 MB or smaller.");
+        return null;
+      }
+      payload.image_base64 = await fileToBase64(file);
+      payload.image_mime = file.type || "image/jpeg";
+    } else {
+      setError("Choose an image first.");
+      return null;
+    }
+    return payload;
+  }
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
     setError(null);
     startTransition(async () => {
-      const payload: Parameters<typeof sendMessageAction>[0] = {
-        recipient_frame_name: recipient.trim().toLowerCase(),
-        kind,
-        sender_label: senderLabel || undefined,
-        inbox_password: inboxPassword || undefined,
-      };
-      if (kind === "text") {
-        payload.text_body = text;
-      } else if (kind === "link") {
-        payload.text_body = link;
-      } else if (kind === "drawing") {
-        if (!drawingBase64) {
-          setError("Draw something first.");
-          return;
-        }
-        payload.image_base64 = drawingBase64;
-        payload.image_mime = "image/png";
-      } else if (file) {
-        payload.image_base64 = await fileToBase64(file);
-        payload.image_mime = file.type || "image/jpeg";
-      } else {
-        setError("Choose an image first.");
-        return;
-      }
+      const payload = await buildPayload();
+      if (!payload) return;
       const result = await sendMessageAction(payload);
       if (!result.ok) {
         setError(result.error);
@@ -66,7 +96,42 @@ export default function SendForm() {
       setFile(null);
       setDrawingBase64("");
       setInboxPassword("");
+      setShowPreview(false);
+      setPreviewPayload(null);
     });
+  }
+
+  function preview() {
+    setMessage(null);
+    setError(null);
+    startPreview(async () => {
+      if (!recipient.trim()) {
+        setError("Enter the recipient handle first.");
+        return;
+      }
+      const payload = await buildPayload();
+      if (!payload) return;
+      setPreviewPayload(payload);
+      setShowPreview(true);
+      setPreviewKey((k) => k + 1);
+    });
+  }
+
+  const loadPreview = useCallback(async () => {
+    if (!previewPayload) {
+      return { ok: false as const, error: "Nothing to preview." };
+    }
+    return previewSendMessageAction(previewPayload);
+  }, [previewPayload]);
+
+  function onFileChange(next: File | null) {
+    if (next && next.size > MAX_IMAGE_BYTES) {
+      setError("Image must be 5 MB or smaller.");
+      setFile(null);
+      return;
+    }
+    setError(null);
+    setFile(next);
   }
 
   return (
@@ -134,7 +199,7 @@ export default function SendForm() {
             type="file"
             accept="image/jpeg,image/png"
             className="input"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            onChange={(e) => onFileChange(e.target.files?.[0] ?? null)}
           />
           {file && <p className="mt-1 text-xs text-ink-soft">Selected: {file.name} ({Math.round(file.size / 1024)} KB). It will be resized for the recipient frame.</p>}
         </div>
@@ -145,11 +210,24 @@ export default function SendForm() {
           <DrawingPad onImageChange={setDrawingBase64} />
         </div>
       )}
+      {showPreview && kind !== "drawing" && (
+        <FrameContentPreview
+          loadPreview={loadPreview}
+          reloadKey={previewKey}
+        />
+      )}
       {error && <p className="text-sm text-red-700">{error}</p>}
       {message && <p className="text-sm text-emerald-700">{message}</p>}
-      <button type="submit" className="btn-primary w-full" disabled={pending}>
-        {pending ? "Sending..." : "Send"}
-      </button>
+      <div className="flex gap-3">
+        {kind !== "drawing" && (
+          <button type="button" className="btn-secondary flex-1" onClick={preview} disabled={pending || previewing}>
+            {previewing ? "Loading preview..." : "Preview"}
+          </button>
+        )}
+        <button type="submit" className={`btn-primary ${kind === "drawing" ? "w-full" : "flex-1"}`} disabled={pending || previewing}>
+          {pending ? "Sending..." : "Send"}
+        </button>
+      </div>
     </form>
   );
 }

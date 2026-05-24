@@ -215,6 +215,16 @@ class InboxSend(ApiModel):
     inbox_password: Optional[str] = None
 
 
+class InboxPreviewRequest(ApiModel):
+    recipient_frame_name: str
+    kind: Literal["text", "image", "link", "drawing"]
+    text_body: Optional[str] = None
+    image_base64: Optional[str] = None
+    image_mime: Optional[str] = None
+    sender_label: Optional[str] = None
+    inbox_password: Optional[str] = None
+
+
 class InboxItemOut(ApiModel):
     id: str
     kind: str

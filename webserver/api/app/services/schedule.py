@@ -25,8 +25,6 @@ from ..content import reddit, rss, weather, xkcd
 from ..content.renderer import (
     RenderTarget,
     image_mime_for_target,
-    render_inbox_image,
-    render_inbox_text,
     render_reddit_magazine,
     render_rss_magazine,
     render_title_body,
@@ -45,6 +43,7 @@ from ..models import (
 )
 from ..schemas import FramePollResponse, PluginPayload, TextPayload
 from .timezones import localize_datetime
+from .inbox_render import png_posterize_for_kind, render_stored_inbox_item
 
 
 @dataclass
@@ -136,21 +135,9 @@ async def _resolve_inbox(
         )
         return jpeg, {"kind": "empty", "png_posterize": False}
 
-    posterize_enabled = bool((schedule_config or {}).get("png_posterize", True))
-    png_posterize = posterize_enabled and item.kind == "drawing"
+    png_posterize = png_posterize_for_kind(item.kind, schedule_config)
 
-    if item.kind == "link" and item.image_bytes:
-        # Link cards already reserve their bottom-right corner for a QR code.
-        jpeg = render_inbox_image(target, item.image_bytes, None)
-    elif item.kind in {"image", "drawing"} and item.image_bytes:
-        jpeg = render_inbox_image(target, item.image_bytes, item.sender_label)
-    else:
-        jpeg = render_inbox_text(
-            target,
-            sender=item.sender_label or "Friend",
-            text=item.text_body or "",
-            when=localize_datetime(item.created_at, frame.timezone),
-        )
+    jpeg = render_stored_inbox_item(target, frame, item)
 
     item.display_count = (item.display_count or 0) + 1
     item.displayed_at = datetime.utcnow()
