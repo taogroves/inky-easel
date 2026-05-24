@@ -50,6 +50,7 @@ function connectionBadge(frame: Frame): { label: string; dot: string; cls: strin
 export default async function DashboardPage() {
   const session = await auth.api.getSession({ headers: await headers() }).catch(() => null);
   if (!session?.user) redirect("/sign-in");
+  const developerMode = Boolean(session.user.developerMode);
 
   let frames: Frame[] = [];
   try {
@@ -64,7 +65,7 @@ export default async function DashboardPage() {
         <div>
           <h1 className="font-display text-3xl">Your frames</h1>
           <p className="mt-1 text-sm text-ink-soft">
-            Hi {session.user.name || session.user.email}. Manage every frame you own here.
+            Hi {session.user.name || session.user.email.split("@")[0]}. Manage every frame you own here.
           </p>
         </div>
         <Link href="/dashboard/frames/new" className="btn-primary">+ New frame</Link>
@@ -96,7 +97,7 @@ export default async function DashboardPage() {
                   <span className={`ml-2 inline-flex items-center gap-1 ${conn.cls}`}>
                     <span className={`inline-block h-2 w-2 rounded-full ${conn.dot}`} /> {conn.label}
                   </span>
-                  <span className="block">Firmware {frame.firmware_version ?? "unknown"}</span>
+                  {developerMode ? <span className="block">Firmware {frame.firmware_version ?? "unknown"}</span> : null}
                   {frame.next_expected_poll_at && (
                     <span className="block">Next expected {relativeFuture(frame.next_expected_poll_at)}</span>
                   )}

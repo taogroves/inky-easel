@@ -1,10 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { eq } from "drizzle-orm";
 
 import { requireAdminDashboardAccess } from "@/lib/admin-auth";
+import { auth } from "@/lib/auth";
 import { api, ApiError, type FirmwareRelease, type FrameWithSecret, type InboxItem, type Plugin, type ScheduleItem, type SetupBundle } from "@/lib/api";
+import { db } from "@/lib/db/client";
+import { user } from "@/lib/db/schema";
 
 export type ActionResult<T = undefined> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -21,6 +26,38 @@ function nullableString(value: FormDataEntryValue | null): string | null {
 function nullableNumber(value: FormDataEntryValue | null): number | null {
   const text = String(value ?? "").trim();
   return text ? Number(text) : null;
+}
+
+async function requireCurrentUser() {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session?.user) throw new Error("Sign in required");
+  return session.user;
+}
+
+// ---------- Account ----------
+
+export async function updateAccountAction(formData: FormData): Promise<ActionResult> {
+  try {
+    const currentUser = await requireCurrentUser();
+    const name = String(formData.get("name") ?? "").trim();
+    if (!name) return { ok: false, error: "Username is required." };
+
+    await db
+      .update(user)
+      .set({
+        name,
+        developerMode: formData.getAll("developerMode").includes("on"),
+        updatedAt: new Date(),
+      })
+      .where(eq(user.id, currentUser.id));
+
+    revalidatePath("/");
+    revalidatePath("/account");
+    revalidatePath("/dashboard");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    return fail(e);
+  }
 }
 
 // ---------- Frames ----------
@@ -215,6 +252,8 @@ export async function deletePluginAction(pluginId: string): Promise<ActionResult
 export async function createFirmwareReleaseAction(formData: FormData): Promise<ActionResult<FirmwareRelease>> {
   try {
     await requireAdminDashboardAccess();
+    const currentUser = await requireCurrentUser();
+    if (!currentUser.developerMode) throw new Error("Developer mode required");
     const release = await api<FirmwareRelease>("/api/firmware/releases", {
       method: "POST",
       body: JSON.stringify({
@@ -234,6 +273,8 @@ export async function createFirmwareReleaseAction(formData: FormData): Promise<A
 export async function activateFirmwareReleaseAction(releaseId: string): Promise<ActionResult<FirmwareRelease>> {
   try {
     await requireAdminDashboardAccess();
+    const currentUser = await requireCurrentUser();
+    if (!currentUser.developerMode) throw new Error("Developer mode required");
     const release = await api<FirmwareRelease>(`/api/firmware/releases/${releaseId}/activate`, { method: "POST" });
     revalidatePath("/dashboard/admin");
     return { ok: true, data: release };

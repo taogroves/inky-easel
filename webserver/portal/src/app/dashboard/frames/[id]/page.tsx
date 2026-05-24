@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 
 import EditFrameForm from "@/components/EditFrameForm";
 import DangerZone from "@/components/DangerZone";
+import { auth } from "@/lib/auth";
 import { ApiError, api, type FrameWithSecret } from "@/lib/api";
 import { formatDateTime } from "@/lib/time";
 
@@ -13,6 +15,8 @@ function statusLabel(status: FrameWithSecret["connection_status"]): string {
 
 export default async function FrameDetailPage(props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
+  const session = await auth.api.getSession({ headers: await headers() }).catch(() => null);
+  const developerMode = Boolean(session?.user.developerMode);
   let frame: FrameWithSecret;
   try {
     frame = await api<FrameWithSecret>(`/api/frames/${id}`);
@@ -49,27 +53,35 @@ export default async function FrameDetailPage(props: { params: Promise<{ id: str
             <div className="flex justify-between"><dt className="text-ink-soft">Disconnects after</dt><dd>{formatDateTime(frame.disconnected_after, frame.timezone)}</dd></div>
             <div className="flex justify-between"><dt className="text-ink-soft">Battery</dt><dd>{frame.last_battery_percent != null ? `${frame.last_battery_percent}%` : "no data"}</dd></div>
             <div className="flex justify-between"><dt className="text-ink-soft">Voltage</dt><dd>{frame.last_battery_voltage != null ? `${frame.last_battery_voltage.toFixed(2)} V` : "—"}</dd></div>
-            <div className="flex justify-between"><dt className="text-ink-soft">Firmware</dt><dd>{frame.firmware_version ?? "unknown"}</dd></div>
-            <div className="flex justify-between"><dt className="text-ink-soft">Target firmware</dt><dd>{frame.target_firmware_version ?? "—"}</dd></div>
-            <div className="flex justify-between"><dt className="text-ink-soft">Firmware status</dt><dd>{frame.last_firmware_status ?? "—"}</dd></div>
+            {developerMode ? (
+              <>
+                <div className="flex justify-between"><dt className="text-ink-soft">Firmware</dt><dd>{frame.firmware_version ?? "unknown"}</dd></div>
+                <div className="flex justify-between"><dt className="text-ink-soft">Target firmware</dt><dd>{frame.target_firmware_version ?? "—"}</dd></div>
+                <div className="flex justify-between"><dt className="text-ink-soft">Firmware status</dt><dd>{frame.last_firmware_status ?? "—"}</dd></div>
+              </>
+            ) : null}
             <div className="flex justify-between"><dt className="text-ink-soft">Display</dt><dd>{frame.display_type}</dd></div>
             <div className="flex justify-between"><dt className="text-ink-soft">Inbox</dt><dd>{frame.inbox_mode}</dd></div>
             <div className="flex justify-between"><dt className="text-ink-soft">Location</dt><dd>{frame.latitude != null && frame.longitude != null ? `${frame.latitude.toFixed(2)}, ${frame.longitude.toFixed(2)}` : "—"}</dd></div>
             <div className="flex justify-between"><dt className="text-ink-soft">Timezone</dt><dd>{frame.timezone ?? "—"}</dd></div>
-            <div className="flex justify-between gap-4 border-t border-ink/10 pt-2">
-              <dt className="text-ink-soft">Storage</dt>
-              <dd className="text-right">{frame.image_delivery.storage}</dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-ink-soft">Image format</dt>
-              <dd className="text-right">{frame.image_delivery.format}</dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-ink-soft">Compression</dt>
-              <dd className="text-right">{frame.image_delivery.compression}</dd>
-            </div>
+            {developerMode ? (
+              <>
+                <div className="flex justify-between gap-4 border-t border-ink/10 pt-2">
+                  <dt className="text-ink-soft">Storage</dt>
+                  <dd className="text-right">{frame.image_delivery.storage}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-ink-soft">Image format</dt>
+                  <dd className="text-right">{frame.image_delivery.format}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-ink-soft">Compression</dt>
+                  <dd className="text-right">{frame.image_delivery.compression}</dd>
+                </div>
+              </>
+            ) : null}
           </dl>
-          {frame.image_delivery.posterize_note ? (
+          {developerMode && frame.image_delivery.posterize_note ? (
             <p className="mt-3 text-xs text-ink-soft">{frame.image_delivery.posterize_note}</p>
           ) : null}
         </div>

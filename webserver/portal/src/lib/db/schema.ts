@@ -47,6 +47,7 @@ export const user = mysqlTable("user", {
   emailVerified: boolean("emailVerified").default(false),
   name: varchar("name", { length: 255 }),
   image: text("image"),
+  developerMode: boolean("developerMode").default(false).notNull(),
   createdAt: datetime("createdAt").notNull(),
   updatedAt: datetime("updatedAt").notNull(),
 });

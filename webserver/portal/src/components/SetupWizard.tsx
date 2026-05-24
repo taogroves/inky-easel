@@ -9,7 +9,13 @@ import { formatDateTime } from "@/lib/time";
 
 type Step = "review" | "wifi" | "deploy" | "verify";
 
-export default function SetupWizard({ frame: initialFrame }: { frame: FrameWithSecret }) {
+export default function SetupWizard({
+  frame: initialFrame,
+  developerMode,
+}: {
+  frame: FrameWithSecret;
+  developerMode: boolean;
+}) {
   const [frame, setFrame] = useState(initialFrame);
   const [step, setStep] = useState<Step>("review");
   const [ssid, setSsid] = useState("");
@@ -47,7 +53,7 @@ export default function SetupWizard({ frame: initialFrame }: { frame: FrameWithS
 
   async function buildBundle() {
     setError(null);
-    const trimmedServerUrl = serverUrl.trim();
+    const trimmedServerUrl = developerMode ? serverUrl.trim() : "";
     if (trimmedServerUrl) {
       try {
         window.localStorage.setItem("inky-easel.frameServerUrl", trimmedServerUrl);
@@ -185,20 +191,22 @@ export default function SetupWizard({ frame: initialFrame }: { frame: FrameWithS
               Stored only on the SD card (locally on the frame) as <code>secrets.py</code>. Not stored on the server.
             </p>
           </div>
-          <div>
-            <label className="label" htmlFor="server-url">Frame server URL (Optional)</label>
-            <input
-              id="server-url"
-              className="input"
-              type="url"
-              value={serverUrl}
-              onChange={(e) => setServerUrl(e.target.value)}
-              placeholder="http://192.168.1.42:8000"
-            />
-            <p className="mt-1 text-xs text-ink-soft">
-              Leave blank unless you know what you're doing. For local development, use the server&apos;s LAN IP and API port, not <code>localhost</code>.
-            </p>
-          </div>
+          {developerMode ? (
+            <div>
+              <label className="label" htmlFor="server-url">Frame server URL (Optional)</label>
+              <input
+                id="server-url"
+                className="input"
+                type="url"
+                value={serverUrl}
+                onChange={(e) => setServerUrl(e.target.value)}
+                placeholder="http://192.168.1.42:8000"
+              />
+              <p className="mt-1 text-xs text-ink-soft">
+                Leave blank unless you know what you&apos;re doing. For local development, use the server&apos;s LAN IP and API port, not <code>localhost</code>.
+              </p>
+            </div>
+          ) : null}
           {error && <p className="text-sm text-red-700">{error}</p>}
           <button
             type="button"
@@ -255,17 +263,19 @@ export default function SetupWizard({ frame: initialFrame }: { frame: FrameWithS
             </div>
             {writeStatus && <p className="text-sm text-emerald-800">{writeStatus}</p>}
             {error && <p className="text-sm text-red-700">{error}</p>}
-            <details className="rounded border border-ink/10 bg-ink/5 p-3 text-xs">
-              <summary className="cursor-pointer">Preview generated files</summary>
-              <ul className="mt-2 list-disc pl-5">
-                {Object.entries(bundle.files).map(([name, content]) => (
-                  <li key={name}>
-                    <span className="font-mono">{name}</span>
-                    <pre className="mt-1 max-h-40 overflow-auto rounded bg-white p-2 text-[10px] leading-snug">{content.slice(0, 800)}{content.length > 800 ? "\n... (truncated)" : ""}</pre>
-                  </li>
-                ))}
-              </ul>
-            </details>
+            {developerMode ? (
+              <details className="rounded border border-ink/10 bg-ink/5 p-3 text-xs">
+                <summary className="cursor-pointer">Preview generated files</summary>
+                <ul className="mt-2 list-disc pl-5">
+                  {Object.entries(bundle.files).map(([name, content]) => (
+                    <li key={name}>
+                      <span className="font-mono">{name}</span>
+                      <pre className="mt-1 max-h-40 overflow-auto rounded bg-white p-2 text-[10px] leading-snug">{content.slice(0, 800)}{content.length > 800 ? "\n... (truncated)" : ""}</pre>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
             <button type="button" className="btn-primary" onClick={() => setStep("verify")}>
               Done copying &mdash; verify connection &rarr;
             </button>

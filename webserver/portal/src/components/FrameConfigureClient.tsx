@@ -28,9 +28,11 @@ function cleanCredentials(credentials: WifiCredential[]): WifiCredential[] {
 export default function FrameConfigureClient({
   frameId,
   initialSession,
+  developerMode,
 }: {
   frameId: string;
   initialSession: FrameConfigurationSession;
+  developerMode: boolean;
 }) {
   const [session, setSession] = useState(initialSession);
   const [credentials, setCredentials] = useState<WifiCredential[]>([]);
@@ -44,8 +46,9 @@ export default function FrameConfigureClient({
   const releases = session.releases;
   const canSave = useMemo(() => {
     const cleaned = cleanCredentials(credentials);
-    return cleaned.length > 0 && activeWifiIndex < cleaned.length && serverUrl.trim().length > 0;
-  }, [activeWifiIndex, credentials, serverUrl]);
+    const hasServerUrl = developerMode ? serverUrl.trim().length > 0 : Boolean(session.observed?.server_url || serverUrl.trim());
+    return cleaned.length > 0 && activeWifiIndex < cleaned.length && hasServerUrl;
+  }, [activeWifiIndex, credentials, developerMode, serverUrl, session.observed?.server_url]);
 
   useEffect(() => {
     if (!session.observed || hydratedFromFrame) return;
@@ -130,9 +133,9 @@ export default function FrameConfigureClient({
       config: {
         wifi_credentials: cleaned,
         active_wifi_index: Math.max(0, Math.min(activeWifiIndex, cleaned.length - 1)),
-        server_url: serverUrl.trim().replace(/\/+$/, ""),
+        server_url: (developerMode ? serverUrl : session.observed?.server_url || serverUrl).trim().replace(/\/+$/, ""),
       },
-      firmware_release_id: firmwareReleaseId || null,
+      firmware_release_id: developerMode ? firmwareReleaseId || null : null,
     });
   }
 
@@ -164,7 +167,7 @@ export default function FrameConfigureClient({
               Values appear after the frame reports what is currently on its SD card.
             </p>
           </div>
-          {session.observed?.firmware_version ? (
+          {developerMode && session.observed?.firmware_version ? (
             <code className="rounded bg-ink/5 px-2 py-1 text-xs">Firmware {session.observed.firmware_version}</code>
           ) : null}
         </div>
@@ -181,20 +184,22 @@ export default function FrameConfigureClient({
           </p>
         ) : (
           <div className="mt-5 space-y-5">
-            <div>
-              <label className="label" htmlFor="server-url">API server address</label>
-              <input
-                id="server-url"
-                className="input"
-                type="url"
-                value={serverUrl}
-                onChange={(e) => setServerUrl(e.target.value)}
-                placeholder="https://your-server.example.com"
-              />
-              <p className="mt-1 text-xs text-red-800">
-                Changing this can strand the frame if the address is unreachable from its Wi-Fi network.
-              </p>
-            </div>
+            {developerMode ? (
+              <div>
+                <label className="label" htmlFor="server-url">API server address</label>
+                <input
+                  id="server-url"
+                  className="input"
+                  type="url"
+                  value={serverUrl}
+                  onChange={(e) => setServerUrl(e.target.value)}
+                  placeholder="https://your-server.example.com"
+                />
+                <p className="mt-1 text-xs text-red-800">
+                  Changing this can strand the frame if the address is unreachable from its Wi-Fi network.
+                </p>
+              </div>
+            ) : null}
 
             <div>
               <div className="mb-2 flex items-center justify-between gap-3">
@@ -251,11 +256,13 @@ export default function FrameConfigureClient({
               </div>
             </div>
 
-            <FirmwareSelector
-              releases={releases}
-              value={firmwareReleaseId}
-              onChange={setFirmwareReleaseId}
-            />
+            {developerMode ? (
+              <FirmwareSelector
+                releases={releases}
+                value={firmwareReleaseId}
+                onChange={setFirmwareReleaseId}
+              />
+            ) : null}
 
             <div className="flex flex-wrap items-center gap-3 border-t border-ink/10 pt-5">
               <button className="btn-primary" type="button" disabled={!canSave || busy} onClick={saveAndExit}>

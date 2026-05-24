@@ -3,7 +3,6 @@ import Link from "next/link";
 import { headers } from "next/headers";
 
 import { auth } from "@/lib/auth";
-import SignOutButton from "@/components/SignOutButton";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -14,6 +13,7 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const session = await auth.api.getSession({ headers: await headers() }).catch(() => null);
   const user = session?.user ?? null;
+  const username = user ? user.name || user.email.split("@")[0] : null;
 
   return (
     <html lang="en">
@@ -29,8 +29,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   <Link href="/dashboard" className="hover:underline">Dashboard</Link>
                   <Link href="/dashboard/plugins" className="hover:underline">Plugins</Link>
                   <Link href="/dashboard/send" className="hover:underline">Send</Link>
-                  <span className="text-ink-soft hidden sm:inline">{user.email}</span>
-                  <SignOutButton />
+                  <span className="hidden font-semibold sm:inline">{username}</span>
+                  <Link href="/account" className="btn-secondary">My account</Link>
                 </>
               ) : (
                 <>

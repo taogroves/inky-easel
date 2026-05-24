@@ -47,6 +47,7 @@ class User(Base):
     emailVerified: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
     name: Mapped[Optional[str]] = mapped_column(String(255))
     image: Mapped[Optional[str]] = mapped_column(Text)
+    developerMode: Mapped[bool] = mapped_column(Boolean, default=False)
     createdAt: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updatedAt: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()

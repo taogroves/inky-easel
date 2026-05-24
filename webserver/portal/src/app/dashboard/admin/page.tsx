@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { activateFirmwareReleaseAction, createFirmwareReleaseAction } from "@/lib/actions";
@@ -8,6 +9,7 @@ import {
   isAdminPasswordConfigured,
   verifyAdminPassword,
 } from "@/lib/admin-auth";
+import { auth } from "@/lib/auth";
 import { api, type FirmwareAdmin, type Frame } from "@/lib/api";
 import { formatDateTime, parseApiDate } from "@/lib/time";
 
@@ -73,6 +75,10 @@ export default async function AdminPage(props: { searchParams: Promise<{ error?:
   }
 
   const { error } = await props.searchParams;
+  const session = await auth.api.getSession({ headers: await headers() }).catch(() => null);
+  if (!session?.user) redirect("/sign-in");
+  if (!session.user.developerMode) redirect("/dashboard");
+
   if (!isAdminPasswordConfigured()) {
     return (
       <div>
