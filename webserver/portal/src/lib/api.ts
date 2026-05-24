@@ -101,7 +101,6 @@ export type ImageDelivery = {
   storage: string;
   format: string;
   compression: string;
-  posterize_note: string | null;
 };
 
 export type Frame = {

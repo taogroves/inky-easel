@@ -234,12 +234,12 @@ class InboxItem(Base):
 
 
 class ContentCache(Base):
-    """Cache for server-rendered images (PNG or JPEG) so frames can re-download a stable URL."""
+    """Cache for server-rendered PNG images so frames can re-download a stable URL."""
 
     __tablename__ = "ie_content_cache"
 
     token: Mapped[str] = mapped_column(String(64), primary_key=True)
-    mime: Mapped[str] = mapped_column(String(64), default="image/jpeg")
+    mime: Mapped[str] = mapped_column(String(64), default="image/png")
     payload: Mapped[bytes] = mapped_column(LONGBLOB)
     expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

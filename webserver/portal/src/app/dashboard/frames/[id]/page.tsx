@@ -82,9 +82,6 @@ export default async function FrameDetailPage(props: { params: Promise<{ id: str
               </>
             ) : null}
           </dl>
-          {developerMode && frame.image_delivery.posterize_note ? (
-            <p className="mt-3 text-xs text-ink-soft">{frame.image_delivery.posterize_note}</p>
-          ) : null}
         </div>
 
         <div className="card">

@@ -63,6 +63,16 @@ class FirmwareReleaseDoc:
     created_by_user_id: str | None = None
 
 
+@dataclass
+class FirmwareLocalChangeDoc:
+    path: str
+    status: str
+    local_sha256: str | None = None
+    active_sha256: str | None = None
+    local_size_bytes: int | None = None
+    active_size_bytes: int | None = None
+
+
 def firmware_dir() -> Path:
     configured = Path(get_settings().frame_firmware_dir)
     if configured.exists():
@@ -78,6 +88,16 @@ def source_files() -> dict[str, str]:
         if not path.exists():
             raise FileNotFoundError(name)
         files[name] = path.read_text(encoding="utf-8")
+    return files
+
+
+def _source_files_best_effort() -> dict[str, str]:
+    root = firmware_dir()
+    files: dict[str, str] = {}
+    for name in FIRMWARE_FILES:
+        path = root / name
+        if path.exists():
+            files[name] = path.read_text(encoding="utf-8")
     return files
 
 
@@ -149,6 +169,61 @@ def _release_from_doc(doc: dict[str, Any] | None) -> FirmwareReleaseDoc | None:
 def _version_file(version: str) -> str:
     escaped = version.replace("\\", "\\\\").replace('"', '\\"')
     return 'FIRMWARE_VERSION = "{}"\n'.format(escaped)
+
+
+def _file_doc(path: str, content: str) -> FirmwareFileDoc:
+    return FirmwareFileDoc(
+        path=path,
+        sha256=_sha256(content),
+        size_bytes=len(content.encode("utf-8")),
+        content=content,
+    )
+
+
+async def compare_local_to_active_release() -> list[FirmwareLocalChangeDoc]:
+    release = await latest_active_release()
+    if release is None:
+        return []
+
+    local = _source_files_best_effort()
+    local["firmware_version.py"] = _version_file(release.version)
+
+    local_files = {path: _file_doc(path, content) for path, content in local.items()}
+    active_files = {file.path: file for file in release.files}
+    changes: list[FirmwareLocalChangeDoc] = []
+    for path in sorted(set(local_files) | set(active_files)):
+        local_file = local_files.get(path)
+        active_file = active_files.get(path)
+        if local_file is None and active_file is not None:
+            changes.append(
+                FirmwareLocalChangeDoc(
+                    path=path,
+                    status="removed",
+                    active_sha256=active_file.sha256,
+                    active_size_bytes=active_file.size_bytes,
+                )
+            )
+        elif local_file is not None and active_file is None:
+            changes.append(
+                FirmwareLocalChangeDoc(
+                    path=path,
+                    status="added",
+                    local_sha256=local_file.sha256,
+                    local_size_bytes=local_file.size_bytes,
+                )
+            )
+        elif local_file and active_file and local_file.sha256 != active_file.sha256:
+            changes.append(
+                FirmwareLocalChangeDoc(
+                    path=path,
+                    status="modified",
+                    local_sha256=local_file.sha256,
+                    active_sha256=active_file.sha256,
+                    local_size_bytes=local_file.size_bytes,
+                    active_size_bytes=active_file.size_bytes,
+                )
+            )
+    return changes
 
 
 async def list_releases() -> list[FirmwareReleaseDoc]:

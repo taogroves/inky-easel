@@ -1,4 +1,8 @@
-"""Inky Frame Spectra ordered dither preview (matches Pimoroni pngdec PNG_DITHER)."""
+"""Server-side Inky Frame Spectra rendering.
+
+The frame displays these PNGs with pngdec dithering disabled, so this module is
+the final color quantizer for frame images.
+"""
 
 from __future__ import annotations
 
@@ -6,104 +10,118 @@ import io
 
 from PIL import Image
 
-from .renderer import INKY_PALETTE
-
-# pimoroni/pimoroni-pico libraries/pico_graphics/pico_graphics.cpp
-DITHER16_PATTERN: tuple[int, ...] = (0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5)
-
 # 7.3" Spectra: black, white, green, blue, red, yellow (no orange)
 SPECTRA6_PALETTE: tuple[tuple[int, int, int], ...] = (
-    INKY_PALETTE["BLACK"],
-    INKY_PALETTE["WHITE"],
-    INKY_PALETTE["GREEN"],
-    INKY_PALETTE["BLUE"],
-    INKY_PALETTE["RED"],
-    INKY_PALETTE["YELLOW"],
+    (0, 0, 0),
+    (255, 255, 255),
+    (40, 130, 60),
+    (35, 70, 160),
+    (200, 30, 30),
+    (240, 200, 40),
 )
 
-PALETTE_SIZE = len(SPECTRA6_PALETTE)
+STUCKI_DIVISOR = 42.0
+STUCKI_CURRENT: tuple[tuple[int, int], ...] = ((1, 8), (2, 4))
+STUCKI_NEXT: tuple[tuple[int, int], ...] = ((-2, 2), (-1, 4), (0, 8), (1, 4), (2, 2))
+STUCKI_NEXT2: tuple[tuple[int, int], ...] = ((-2, 1), (-1, 2), (0, 4), (1, 2), (2, 1))
 
 
-def _luminance(r: int, g: int, b: int) -> int:
-    return r * 21 + g * 72 + b * 7
+def _srgb_to_linear(channel: float) -> float:
+    c = max(0.0, min(255.0, channel)) / 255.0
+    if c <= 0.04045:
+        return c / 12.92
+    return ((c + 0.055) / 1.055) ** 2.4
 
 
-def _distance(r1: int, g1: int, b1: int, r2: int, g2: int, b2: int) -> int:
-    rmean = (r1 + r2) // 2
-    rx = r1 - r2
-    gx = g1 - g2
-    bx = b1 - b2
-    return abs(((512 + rmean) * rx * rx) >> 8) + 4 * gx * gx + (((767 - rmean) * bx * bx) >> 8)
+def _linear_to_oklab(r: float, g: float, b: float) -> tuple[float, float, float]:
+    l = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b
+    m = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b
+    s = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b
+    l_ = l ** (1.0 / 3.0)
+    m_ = m ** (1.0 / 3.0)
+    s_ = s ** (1.0 / 3.0)
+    return (
+        0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_,
+        1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_,
+        0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_,
+    )
 
 
-def _closest(r: int, g: int, b: int) -> int:
-    best_i = 0
-    best_d = 1 << 30
-    for i in range(PALETTE_SIZE):
-        pr, pg, pb = SPECTRA6_PALETTE[i]
-        d = _distance(r, g, b, pr, pg, pb)
-        if d < best_d:
-            best_d = d
-            best_i = i
-    return best_i
+def _oklab(r: float, g: float, b: float) -> tuple[float, float, float]:
+    return _linear_to_oklab(_srgb_to_linear(r), _srgb_to_linear(g), _srgb_to_linear(b))
 
 
-def _get_dither_candidates(r: int, g: int, b: int) -> list[int]:
-    error = [0, 0, 0]
-    candidates: list[int] = []
-    for _ in range(16):
-        cr = r + error[0]
-        cg = g + error[1]
-        cb = b + error[2]
-        idx = _closest(cr, cg, cb)
-        candidates.append(idx)
-        pr, pg, pb = SPECTRA6_PALETTE[idx]
-        error[0] += r - pr
-        error[1] += g - pg
-        error[2] += b - pb
-    candidates.sort(key=lambda i: _luminance(*SPECTRA6_PALETTE[i]), reverse=True)
-    return candidates
+_PALETTE_OKLAB = tuple(_oklab(*color) for color in SPECTRA6_PALETTE)
 
 
-def _build_candidate_cache() -> list[list[int]]:
-    cache: list[list[int]] = []
-    for i in range(512):
-        rr = (i & 0x1C0) >> 1
-        gg = (i & 0x38) << 2
-        bb = (i & 0x7) << 5
-        r = rr | (rr >> 3) | (rr >> 6)
-        g = gg | (gg >> 3) | (gg >> 6)
-        b = bb | (bb >> 3) | (bb >> 6)
-        cache.append(_get_dither_candidates(r, g, b))
-    return cache
+def _closest_palette_color(r: float, g: float, b: float) -> tuple[int, int, int]:
+    l, a, b_ = _oklab(r, g, b)
+    best_index = 0
+    best_distance = float("inf")
+    for i, (pl, pa, pb) in enumerate(_PALETTE_OKLAB):
+        dl = l - pl
+        da = a - pa
+        db = b_ - pb
+        distance = dl * dl * 1.25 + da * da + db * db
+        if distance < best_distance:
+            best_distance = distance
+            best_index = i
+    return SPECTRA6_PALETTE[best_index]
 
 
-_CANDIDATE_CACHE = _build_candidate_cache()
+def _clamp_channel(value: float) -> float:
+    return max(0.0, min(255.0, value))
 
 
-def _cache_key(r: int, g: int, b: int) -> int:
-    return ((r & 0xE0) << 1) | ((g & 0xE0) >> 2) | ((b & 0xE0) >> 5)
+def _add_error(row: list[float], width: int, x: int, er: float, eg: float, eb: float, weight: float) -> None:
+    if 0 <= x < width:
+        i = x * 3
+        row[i] += er * weight
+        row[i + 1] += eg * weight
+        row[i + 2] += eb * weight
 
 
 def dither_image(img: Image.Image) -> Image.Image:
-    """Ordered dither using Pimoroni PicoGraphics_PenInky7::set_pixel_dither."""
+    """Return a six-color PNG-ready image using serpentine Stucki dithering."""
     rgb = img.convert("RGB")
     width, height = rgb.size
     out = Image.new("RGB", (width, height))
     src = rgb.load()
     dst = out.load()
+    err_current = [0.0] * (width * 3)
+    err_next = [0.0] * (width * 3)
+    err_next2 = [0.0] * (width * 3)
+
     for y in range(height):
-        for x in range(width):
-            r, g, b = src[x, y]
-            key = _cache_key(r, g, b)
-            pattern_index = (x & 3) | ((y & 3) << 2)
-            palette_idx = _CANDIDATE_CACHE[key][DITHER16_PATTERN[pattern_index]]
-            dst[x, y] = SPECTRA6_PALETTE[palette_idx]
+        direction = 1 if y % 2 == 0 else -1
+        x_range = range(width) if direction == 1 else range(width - 1, -1, -1)
+        for x in x_range:
+            i = x * 3
+            sr, sg, sb = src[x, y]
+            r = _clamp_channel(sr + err_current[i])
+            g = _clamp_channel(sg + err_current[i + 1])
+            b = _clamp_channel(sb + err_current[i + 2])
+            pr, pg, pb = _closest_palette_color(r, g, b)
+            dst[x, y] = (pr, pg, pb)
+
+            er = r - pr
+            eg = g - pg
+            eb = b - pb
+            for offset, weight in STUCKI_CURRENT:
+                _add_error(err_current, width, x + offset * direction, er, eg, eb, weight / STUCKI_DIVISOR)
+            for offset, weight in STUCKI_NEXT:
+                _add_error(err_next, width, x + offset * direction, er, eg, eb, weight / STUCKI_DIVISOR)
+            for offset, weight in STUCKI_NEXT2:
+                _add_error(err_next2, width, x + offset * direction, er, eg, eb, weight / STUCKI_DIVISOR)
+
+        err_current = err_next
+        err_next = err_next2
+        err_next2 = [0.0] * (width * 3)
     return out
 
 
 def apply_inky_display(image_bytes: bytes) -> bytes:
-    """Return PNG bytes with Inky Frame ordered dither applied."""
+    """Return PNG bytes with final six-color Stucki dithering applied."""
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     processed = dither_image(img)
     buf = io.BytesIO()

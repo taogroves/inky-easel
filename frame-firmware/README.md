@@ -13,7 +13,7 @@ requested duration.
 | `flash_loader_main.py` | One-time internal-flash loader. Copy this to the frame as `main.py`. |
 | `main.py` | SD-card compatibility wrapper for firmware that boots SD `main.py` directly. |
 | `inky_easel_app.py` | App entry. Orchestrates wake -> poll -> render -> sleep. |
-| `frame_client.py` | HTTP poll, JPEG streaming, plugin runner. |
+| `frame_client.py` | HTTP poll, PNG streaming, plugin runner. |
 | `firmware_updater.py` | Downloads, verifies, backs up, and swaps SD firmware release files. |
 | `firmware_version.py` | Generated release version reported on every poll. |
 | `battery.py` | VSYS ADC sampling and percent conversion. |
@@ -70,7 +70,7 @@ python frame-firmware/flash_to_pico.py ~/Downloads/inky-easel-my-frame.zip
 
 Plug the Inky Frame in over USB, run the command, then unplug or press reset.
 The bundle's `main.py` starts `inky_easel_app.py` from flash. Image downloads
-use `/_content.jpg` on flash when no SD card is present (plugins use
+use `/_content.png` on flash when no SD card is present (plugins use
 `/_plugin.py`). Re-flash after firmware updates so these fixes reach the board.
 
 Options:
@@ -86,7 +86,7 @@ Options:
 
 You can drop the SD app files onto a USB-connected Inky Frame via Thonny to test
 without an SD card. `inky_easel_app.py` will detect the missing `/sd` mount and
-fall back to writing the content JPEG to flash.
+fall back to writing the content PNG to flash.
 
 For a physical frame on your Wi-Fi, set `SERVER_URL` to the API URL reachable
 from the frame, such as `http://192.168.1.42:8000`. Do not use `localhost`

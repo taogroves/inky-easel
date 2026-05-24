@@ -170,7 +170,7 @@ async def send_inbox(
             raise HTTPException(422, "image_base64 is not a supported image")
         except Exception as e:
             raise HTTPException(422, f"Could not process image: {e}")
-        item.image_mime = "image/jpeg"
+        item.image_mime = "image/png"
     elif payload.kind == "link":
         if not payload.text_body or not payload.text_body.strip():
             raise HTTPException(422, "text_body is required for link messages")
@@ -190,7 +190,7 @@ async def send_inbox(
             )
         item.text_body = preview.final_url
         item.image_bytes = render_link_preview(target, preview)
-        item.image_mime = "image/jpeg"
+        item.image_mime = "image/png"
     else:  # pragma: no cover - pydantic enforces this
         raise HTTPException(422, "Unknown kind")
 

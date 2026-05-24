@@ -1,4 +1,4 @@
-"""Talk to the webserver: poll for the next item, stream JPEG content to SD,
+"""Talk to the webserver: poll for the next item, stream PNG content,
 and run user-defined plugins. Designed for the very tight Pico RAM budget.
 
 Protocol (POST /api/frame/poll):
@@ -13,7 +13,6 @@ Protocol (POST /api/frame/poll):
   response = { "type": "image"|"text"|"plugin"|"sleep",
                "image_url": str | null,
                "image_mime": str | null,
-               "image_posterize": bool | null,
                "text": { "title": str, "body": str, "accent": str } | null,
                "plugin": { "code": str, "context": dict } | null,
                "firmware_update": { "version": str, "release_id": str,
@@ -37,15 +36,13 @@ try:
 except ImportError:
     import urequest as _urequest
 
-CONTENT_PATH = "/sd/_content.jpg"
+CONTENT_PATH = "/sd/_content.png"
 PLUGIN_PATH = "/sd/_plugin.py"
 
 
 def content_path_for(mime=None, *, on_sd=True):
     base = "/sd/_content" if on_sd else "/_content"
-    if mime == "image/png":
-        return base + ".png"
-    return base + ".jpg"
+    return base + ".png"
 HTTP_TIMEOUT_SECONDS = 20
 
 
@@ -153,29 +150,15 @@ def download_image(url, dest=None, mime=None):
         gc.collect()
 
 
-def download_jpeg(url, dest=None, mime=None):
-    """Backward-compatible alias for download_image."""
-    return download_image(url, dest=dest, mime=mime)
-
-
-def render_image(graphics, path=None, mime=None, posterize=False):
+def render_image(graphics, path=None, mime=None):
     if path is None:
         path = _content_path()
-    use_png = mime == "image/png" or str(path).lower().endswith(".png")
-    if use_png:
-        import pngdec
-        from pngdec import PNG
+    import pngdec
+    from pngdec import PNG
 
-        mode = pngdec.PNG_POSTERISE if posterize else pngdec.PNG_DITHER
-        png = PNG(graphics)
-        png.open_file(path)
-        png.decode(0, 0, mode=mode)
-        return
-    import jpegdec
-
-    jpeg = jpegdec.JPEG(graphics)
-    jpeg.open_file(path)
-    jpeg.decode()
+    png = PNG(graphics)
+    png.open_file(path)
+    png.decode(0, 0, mode=pngdec.PNG_POSTERISE)
 
 
 def run_plugin(graphics, width, height, code, context):

@@ -200,8 +200,7 @@ def _render(graphics, width, height, response):
         url = response.get("image_url")
         if not url:
             raise RuntimeError("No image URL")
-        mime = response.get("image_mime") or "image/jpeg"
-        posterize = bool(response.get("image_posterize"))
+        mime = response.get("image_mime") or "image/png"
         ih.network_led(100)
         try:
             on_sd = frame_client.CONTENT_PATH.startswith("/sd")
@@ -211,7 +210,7 @@ def _render(graphics, width, height, response):
         finally:
             ih.stop_network_led()
         scene.clear(graphics)
-        frame_client.render_image(graphics, content_path, mime=mime, posterize=posterize)
+        frame_client.render_image(graphics, content_path, mime=mime)
     elif kind == "text":
         payload = response.get("text") or {}
         accent_name = (payload.get("accent") or "BLUE").upper()
@@ -438,7 +437,7 @@ def main():
     sd_ok = _mount_sd()
     if not sd_ok:
         print("Continuing without SD; content and plugins will use internal flash.")
-        frame_client.CONTENT_PATH = "/_content.jpg"
+        frame_client.CONTENT_PATH = "/_content.png"
         frame_client.PLUGIN_PATH = "/_plugin.py"
 
     try:

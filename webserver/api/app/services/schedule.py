@@ -24,7 +24,6 @@ from ..config import get_settings
 from ..content import reddit, rss, weather, xkcd
 from ..content.renderer import (
     RenderTarget,
-    image_mime_for_target,
     render_reddit_magazine,
     render_rss_magazine,
     render_title_body,
@@ -43,7 +42,7 @@ from ..models import (
 )
 from ..schemas import FramePollResponse, PluginPayload, TextPayload
 from .timezones import localize_datetime
-from .inbox_render import png_posterize_for_kind, render_stored_inbox_item
+from .inbox_render import render_stored_inbox_item
 
 
 @dataclass
@@ -79,15 +78,12 @@ async def _attach_image(
     target: RenderTarget,
     payload: bytes,
     asset_base_url: str | None,
-    *,
-    png_posterize: bool = False,
 ) -> None:
-    mime = image_mime_for_target(target)
+    mime = "image/png"
     token = await _cache_image(session, payload, mime)
     response.type = "image"
     response.image_url = _image_url(token, asset_base_url)
     response.image_mime = mime
-    response.image_posterize = png_posterize if mime == "image/png" else None
     response.text = None
 
 
@@ -95,7 +91,6 @@ async def _resolve_inbox(
     session: AsyncSession,
     frame: Frame,
     target: RenderTarget,
-    schedule_config: Optional[dict] = None,
 ) -> tuple[bytes, Optional[dict]]:
     item = (
         await session.execute(
@@ -127,24 +122,22 @@ async def _resolve_inbox(
         ).scalar_one_or_none()
 
     if item is None:
-        jpeg = render_title_body(
+        png = render_title_body(
             target,
             title="Inbox empty",
             body="No new messages waiting.\nAsk a friend to send something!",
             accent="GREEN",
         )
-        return jpeg, {"kind": "empty", "png_posterize": False}
+        return png, {"kind": "empty"}
 
-    png_posterize = png_posterize_for_kind(item.kind, schedule_config)
-
-    jpeg = render_stored_inbox_item(target, frame, item)
+    png = render_stored_inbox_item(target, frame, item)
 
     item.display_count = (item.display_count or 0) + 1
     item.displayed_at = datetime.utcnow()
     delete_after = frame.inbox_delete_after_displays
     if delete_after and item.display_count >= delete_after:
         await session.delete(item)
-    return jpeg, {"kind": item.kind, "inbox_id": item.id, "png_posterize": png_posterize}
+    return png, {"kind": item.kind, "inbox_id": item.id}
 
 
 async def _resolve_weather(frame: Frame, target: RenderTarget, config: Optional[dict] = None) -> bytes:
@@ -196,7 +189,7 @@ async def _resolve_reddit(target: RenderTarget, config: Optional[dict]) -> bytes
         label = payload.get("label") or reddit.display_label(subreddit)
         return render_reddit_magazine(target, label, payload.get("items", []))
     except Exception as e:
-        return render_title_body(target, "Reddit", f"Could not fetch subreddit:\n{e}", accent="ORANGE")
+        return render_title_body(target, "Reddit", f"Could not fetch subreddit:\n{e}", accent="RED")
 
 
 async def _resolve_plugin(
@@ -303,27 +296,26 @@ async def resolve_next_for_frame(
     )
 
     if item.item_type == "inbox":
-        jpeg, meta = await _resolve_inbox(session, frame, target, item.config)
+        png, meta = await _resolve_inbox(session, frame, target)
         await _attach_image(
             session,
             response,
             target,
-            jpeg,
+            png,
             asset_base_url,
-            png_posterize=bool((meta or {}).get("png_posterize")),
         )
     elif item.item_type == "weather":
-        jpeg = await _resolve_weather(frame, target, item.config)
-        await _attach_image(session, response, target, jpeg, asset_base_url)
+        png = await _resolve_weather(frame, target, item.config)
+        await _attach_image(session, response, target, png, asset_base_url)
     elif item.item_type == "xkcd":
-        jpeg = await _resolve_xkcd(target)
-        await _attach_image(session, response, target, jpeg, asset_base_url)
+        png = await _resolve_xkcd(target)
+        await _attach_image(session, response, target, png, asset_base_url)
     elif item.item_type in ("rss", "bbc"):
-        jpeg = await _resolve_rss(target, item.config)
-        await _attach_image(session, response, target, jpeg, asset_base_url)
+        png = await _resolve_rss(target, item.config)
+        await _attach_image(session, response, target, png, asset_base_url)
     elif item.item_type == "reddit":
-        jpeg = await _resolve_reddit(target, item.config)
-        await _attach_image(session, response, target, jpeg, asset_base_url)
+        png = await _resolve_reddit(target, item.config)
+        await _attach_image(session, response, target, png, asset_base_url)
     elif item.item_type == "static":
         text = (item.config or {}) if item.config else {}
         response.type = "text"

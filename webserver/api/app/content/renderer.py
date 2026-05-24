@@ -1,7 +1,7 @@
 """Pillow-backed renderers that produce image payloads sized for an Inky Frame.
 
-Frames with an SD card receive lossless PNG (decoded by Pimoroni `pngdec`).
-Frames on internal flash receive smaller JPEGs (decoded by `jpegdec`).
+Frames receive server-dithered PNGs decoded by Pimoroni `pngdec` with frame-side
+dithering disabled.
 Fonts: we use the default Pillow truetype lookup; if the platform has
 DejaVu (most Debian/Ubuntu containers do, including python:3.12-slim once we
 install fonts-dejavu-core) we use that.
@@ -21,6 +21,7 @@ import qrcode
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from .bitmap_font import draw_text, measure_text
+from .inky_display import dither_image
 from .link_preview import LinkPreview
 from .reddit import REDDIT_ORANGE
 from .url_clean import clean_url_for_qr
@@ -95,19 +96,10 @@ def _wrap(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_w
     return lines
 
 
-def image_mime_for_target(target: RenderTarget) -> str:
-    return "image/png" if target.has_sd_card else "image/jpeg"
-
-
-def _finalize_image(img: Image.Image, target: RenderTarget, *, quality: int | None = None) -> bytes:
-    """PNG on SD (sharp text); JPEG on internal flash (smaller, less RAM to decode)."""
-    if target.has_sd_card:
-        buf = io.BytesIO()
-        img.convert("RGB").save(buf, format="PNG", optimize=True)
-        return buf.getvalue()
-    q = quality if quality is not None else 85
+def _finalize_image(img: Image.Image, target: RenderTarget) -> bytes:
+    """Apply final six-color Stucki dithering and encode as PNG."""
     buf = io.BytesIO()
-    img.convert("RGB").save(buf, format="JPEG", quality=q, subsampling=2, optimize=True)
+    dither_image(img).save(buf, format="PNG", optimize=True)
     return buf.getvalue()
 
 
@@ -636,8 +628,7 @@ def render_weather(target: RenderTarget, payload: dict) -> bytes:
             font=stamp_font,
         )
 
-    weather_q = 80 if not target.has_sd_card else None
-    return _finalize_image(img, target, quality=weather_q)
+    return _finalize_image(img, target)
 
 
 def _draw_qr_code(img: Image.Image, ox: int, oy: int, size: int, payload: str) -> None:

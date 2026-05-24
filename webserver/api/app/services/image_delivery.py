@@ -9,30 +9,23 @@ class ImageDeliveryOut(BaseModel):
     storage: str
     format: str
     compression: str
-    posterize_note: str | None = None
 
 
 def image_delivery_for_frame(has_sd_card: bool | None) -> ImageDeliveryOut:
     if has_sd_card is None:
         return ImageDeliveryOut(
             storage="Unknown",
-            format="—",
-            compression="Will be reported on the frame's next check-in.",
-            posterize_note=None,
+            format="PNG",
+            compression="Server-side six-color Stucki dithering; frame-side dithering disabled.",
         )
     if has_sd_card:
         return ImageDeliveryOut(
             storage="microSD card",
             format="PNG",
-            compression="Lossless PNG (no JPEG artifacts)",
-            posterize_note=(
-                "Inbox drawings can use posterize (sharp pixels) when enabled on the inbox schedule item; "
-                "other image slides use dithered PNG."
-            ),
+            compression="Server-side six-color Stucki dithering; frame-side dithering disabled.",
         )
     return ImageDeliveryOut(
         storage="Internal flash only",
-        format="JPEG",
-        compression="Lossy JPEG — quality 85 (weather 80), 4:2:0 chroma subsampling",
-        posterize_note=None,
+        format="PNG",
+        compression="Server-side six-color Stucki dithering; frame-side dithering disabled.",
     )

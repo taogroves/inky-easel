@@ -186,7 +186,7 @@ export const inboxItem = mysqlTable(
 
 export const contentCache = mysqlTable("ie_content_cache", {
   token: varchar("token", { length: 64 }).primaryKey(),
-  mime: varchar("mime", { length: 64 }).default("image/jpeg").notNull(),
+  mime: varchar("mime", { length: 64 }).default("image/png").notNull(),
   payload: longblob("payload").notNull(),
   expiresAt: datetime("expires_at").notNull(),
   createdAt: datetime("created_at").notNull(),

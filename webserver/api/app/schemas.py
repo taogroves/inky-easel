@@ -96,7 +96,6 @@ class FramePollResponse(ApiModel):
     type: Literal["image", "text", "plugin", "sleep"] = "sleep"
     image_url: Optional[str] = None
     image_mime: Optional[str] = None
-    image_posterize: Optional[bool] = None
     text: Optional[TextPayload] = None
     plugin: Optional[PluginPayload] = None
     firmware_update: Optional[FirmwareUpdatePayload] = None

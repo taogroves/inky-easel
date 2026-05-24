@@ -4,14 +4,11 @@ from __future__ import annotations
 
 import base64
 from datetime import datetime
-from typing import Optional
 from urllib.parse import urlparse
 
 from PIL import UnidentifiedImageError
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..content.inky_display import apply_inky_display
 from ..content.link_preview import LinkPreview, resolve_link_preview
 from ..content.renderer import (
     RenderTarget,
@@ -22,27 +19,10 @@ from ..content.renderer import (
     target_for,
 )
 from ..content.url_clean import clean_url_for_qr
-from ..models import Frame, InboxItem, ScheduleItem
+from ..models import Frame, InboxItem
 from .timezones import localize_datetime
 
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
-
-
-def png_posterize_for_kind(kind: str, schedule_config: Optional[dict]) -> bool:
-    posterize_enabled = bool((schedule_config or {}).get("png_posterize", True))
-    return posterize_enabled and kind == "drawing"
-
-
-async def inbox_schedule_config(session: AsyncSession, frame_id: str) -> dict:
-    item = (
-        await session.execute(
-            select(ScheduleItem)
-            .where(ScheduleItem.frame_id == frame_id, ScheduleItem.item_type == "inbox")
-            .order_by(ScheduleItem.position)
-            .limit(1)
-        )
-    ).scalar_one_or_none()
-    return dict(item.config or {}) if item else {"png_posterize": True}
 
 
 def render_stored_inbox_item(target: RenderTarget, frame: Frame, item: InboxItem) -> bytes:
@@ -106,7 +86,7 @@ async def render_inbox_preview(
     else:
         raise ValueError("Unknown kind")
 
-    return apply_inky_display(payload), "image/png"
+    return payload, "image/png"
 
 
 async def render_stored_item_preview(
@@ -116,7 +96,7 @@ async def render_stored_item_preview(
 ) -> tuple[bytes, str]:
     target = _preview_target(frame)
     payload = render_stored_inbox_item(target, frame, item)
-    return apply_inky_display(payload), "image/png"
+    return payload, "image/png"
 
 
 class ImageTooLargeError(ValueError):
