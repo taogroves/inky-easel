@@ -172,9 +172,9 @@ def _render(graphics, width, height, response):
         return
 
 
-def _render_with_battery(graphics, width, height, response, percent):
+def _render_with_battery(graphics, width, height, response, voltage, percent):
     _render(graphics, width, height, response)
-    if battery.is_low(percent):
+    if battery.is_low(percent, voltage):
         scene.draw_low_battery_overlay(graphics, width, percent)
 
 
@@ -218,7 +218,7 @@ def _scheduled_refresh(graphics, width, height, server_url, frame_id,
             return None, 1, False
 
     try:
-        _render_with_battery(graphics, width, height, response, percent)
+        _render_with_battery(graphics, width, height, response, voltage, percent)
     except Exception as e:
         print("Render failed:", e)
         _show_error(graphics, width, height, "Render failed")
@@ -262,7 +262,7 @@ def main():
     voltage, percent = battery.read()
     print("Battery {:.2f}V ({}%)".format(voltage, percent))
 
-    if battery.is_critical(percent):
+    if battery.is_critical(percent, voltage):
         scene.draw_critical_battery_screen(graphics, width, height)
         _deep_sleep(60, voltage=voltage)
         return

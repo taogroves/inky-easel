@@ -22,6 +22,8 @@ BATTERY_FULL_V = 4.2
 BATTERY_EMPTY_V = 3.2
 LOW_BATTERY_PCT = 20
 CRITICAL_BATTERY_PCT = 10
+USB_ADC_LOW_V = 0.5
+USB_VOLTAGE_THRESHOLD = 4.55
 
 
 def _read_median_voltage(samples: int) -> float:
@@ -65,9 +67,18 @@ def read():
     return voltage, voltage_to_percent(voltage)
 
 
-def is_low(percent: int) -> bool:
+def is_usb_power(voltage: float) -> bool:
+    """External power: ADC reads near zero on USB, or VSYS well above LiPo."""
+    return voltage < USB_ADC_LOW_V or voltage >= USB_VOLTAGE_THRESHOLD
+
+
+def is_low(percent: int, voltage: float = None) -> bool:
+    if voltage is not None and is_usb_power(voltage):
+        return False
     return percent < LOW_BATTERY_PCT
 
 
-def is_critical(percent: int) -> bool:
+def is_critical(percent: int, voltage: float = None) -> bool:
+    if voltage is not None and is_usb_power(voltage):
+        return False
     return percent < CRITICAL_BATTERY_PCT

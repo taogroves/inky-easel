@@ -122,12 +122,10 @@ def sync_rtc_time(ssid=None, password=None):
         return None
 
 
-USB_VOLTAGE_THRESHOLD = 4.55
-
-
 def is_usb_power(voltage):
-    """USB / charging usually reads well above a LiPo cell alone."""
-    return voltage >= USB_VOLTAGE_THRESHOLD
+    import battery
+
+    return battery.is_usb_power(voltage)
 
 
 def _prepare_rtc_alarm(minutes):
