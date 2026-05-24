@@ -281,9 +281,22 @@ class FirmwareReleaseOut(ApiModel):
         from_attributes = True
 
 
+class FirmwareLocalChangeOut(ApiModel):
+    path: str
+    status: Literal["added", "modified", "removed"]
+    local_sha256: Optional[str] = None
+    active_sha256: Optional[str] = None
+    local_size_bytes: Optional[int] = None
+    active_size_bytes: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+
 class FirmwareAdminOut(ApiModel):
     frames: list[FrameOut]
     releases: list[FirmwareReleaseOut]
+    local_changes: list[FirmwareLocalChangeOut] = Field(default_factory=list)
 
 
 class FrameConfigurationSave(ApiModel):

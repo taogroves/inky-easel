@@ -99,11 +99,11 @@ export default async function AdminPage(props: { searchParams: Promise<{ error?:
     return <AdminPasswordForm error={error === "1"} />;
   }
 
-  let data: FirmwareAdmin = { frames: [], releases: [] };
+  let data: FirmwareAdmin = { frames: [], releases: [], local_changes: [] };
   try {
     data = await api<FirmwareAdmin>("/api/firmware/admin");
   } catch {
-    data = { frames: [], releases: [] };
+    data = { frames: [], releases: [], local_changes: [] };
   }
 
   const activeRelease = data.releases.find((release) => release.active) ?? null;
@@ -172,6 +172,29 @@ export default async function AdminPage(props: { searchParams: Promise<{ error?:
           <p className="mt-2 text-sm text-ink-soft">
             Creates an immutable backup snapshot from the server&apos;s mounted frame-firmware files.
           </p>
+          <div className="mt-4 rounded-md border border-ink/10 bg-ink/5 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold">Local changes</h3>
+              <span className={`rounded-full px-2 py-0.5 text-xs ${data.local_changes.length ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>
+                {data.local_changes.length ? `${data.local_changes.length} changed` : "in sync"}
+              </span>
+            </div>
+            {data.local_changes.length ? (
+              <ul className="mt-3 space-y-2 text-xs">
+                {data.local_changes.slice(0, 8).map((change) => (
+                  <li key={change.path} className="flex items-center justify-between gap-3">
+                    <span className="font-mono">{change.path}</span>
+                    <span className="rounded bg-white px-2 py-0.5 text-ink-soft">{change.status}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-xs text-ink-soft">Server files match the active release.</p>
+            )}
+            {data.local_changes.length > 8 ? (
+              <p className="mt-2 text-xs text-ink-soft">Plus {data.local_changes.length - 8} more files.</p>
+            ) : null}
+          </div>
           <form action={createRelease} className="mt-4 space-y-3">
             <div>
               <label className="label" htmlFor="version">Version</label>

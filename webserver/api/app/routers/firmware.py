@@ -12,6 +12,7 @@ from ..models import Frame, User
 from ..schemas import FirmwareAdminOut, FirmwareReleaseCreate, FirmwareReleaseOut
 from ..services.firmware import (
     activate_release as activate_firmware_release,
+    compare_local_to_active_release,
     create_release_from_source,
     get_firmware_file,
     list_releases,
@@ -30,7 +31,8 @@ async def admin_status(
         await session.execute(select(Frame).where(Frame.user_id == user.id).order_by(Frame.created_at))
     ).scalars().all()
     releases = await list_releases()
-    return FirmwareAdminOut(frames=frames, releases=releases)
+    local_changes = await compare_local_to_active_release()
+    return FirmwareAdminOut(frames=frames, releases=releases, local_changes=local_changes)
 
 
 @router.post("/api/firmware/releases", response_model=FirmwareReleaseOut, status_code=status.HTTP_201_CREATED)

@@ -186,9 +186,19 @@ export type FirmwareRelease = {
   files: FirmwareFile[];
 };
 
+export type FirmwareLocalChange = {
+  path: string;
+  status: "added" | "modified" | "removed";
+  local_sha256: string | null;
+  active_sha256: string | null;
+  local_size_bytes: number | null;
+  active_size_bytes: number | null;
+};
+
 export type FirmwareAdmin = {
   frames: Frame[];
   releases: FirmwareRelease[];
+  local_changes: FirmwareLocalChange[];
 };
 
 export type WifiCredential = {
