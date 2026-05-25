@@ -20,10 +20,21 @@ SPECTRA6_PALETTE: tuple[tuple[int, int, int], ...] = (
     (240, 200, 40),
 )
 
-STUCKI_DIVISOR = 42.0
-STUCKI_CURRENT: tuple[tuple[int, int], ...] = ((1, 8), (2, 4))
-STUCKI_NEXT: tuple[tuple[int, int], ...] = ((-2, 2), (-1, 4), (0, 8), (1, 4), (2, 2))
-STUCKI_NEXT2: tuple[tuple[int, int], ...] = ((-2, 1), (-1, 2), (0, 4), (1, 2), (2, 1))
+# Stucki error diffusion kernel: (weight, dx, dy). Scanned left-to-right only.
+STUCKI_KERNEL: tuple[tuple[float, int, int], ...] = (
+    (8 / 42, 1, 0),
+    (4 / 42, 2, 0),
+    (2 / 42, -2, 1),
+    (4 / 42, -1, 1),
+    (8 / 42, 0, 1),
+    (4 / 42, 1, 1),
+    (2 / 42, 2, 1),
+    (1 / 42, -2, 2),
+    (2 / 42, -1, 2),
+    (4 / 42, 0, 2),
+    (2 / 42, 1, 2),
+    (1 / 42, 2, 2),
+)
 
 
 def _srgb_to_linear(channel: float) -> float:
@@ -54,69 +65,71 @@ def _oklab(r: float, g: float, b: float) -> tuple[float, float, float]:
 _PALETTE_OKLAB = tuple(_oklab(*color) for color in SPECTRA6_PALETTE)
 
 
-def _closest_palette_color(r: float, g: float, b: float) -> tuple[int, int, int]:
-    l, a, b_ = _oklab(r, g, b)
+def _closest_palette_index(l: float, a: float, b: float) -> int:
     best_index = 0
     best_distance = float("inf")
     for i, (pl, pa, pb) in enumerate(_PALETTE_OKLAB):
         dl = l - pl
         da = a - pa
-        db = b_ - pb
-        distance = dl * dl * 1.25 + da * da + db * db
+        db = b - pb
+        distance = dl * dl + da * da + db * db
         if distance < best_distance:
             best_distance = distance
             best_index = i
-    return SPECTRA6_PALETTE[best_index]
+    return best_index
 
 
-def _clamp_channel(value: float) -> float:
-    return max(0.0, min(255.0, value))
-
-
-def _add_error(row: list[float], width: int, x: int, er: float, eg: float, eb: float, weight: float) -> None:
-    if 0 <= x < width:
-        i = x * 3
-        row[i] += er * weight
-        row[i + 1] += eg * weight
-        row[i + 2] += eb * weight
+def _add_error(
+    err_l: list[float],
+    err_a: list[float],
+    err_b: list[float],
+    width: int,
+    height: int,
+    x: int,
+    y: int,
+    el: float,
+    ea: float,
+    eb: float,
+    weight: float,
+) -> None:
+    if 0 <= x < width and 0 <= y < height:
+        i = y * width + x
+        err_l[i] += el * weight
+        err_a[i] += ea * weight
+        err_b[i] += eb * weight
 
 
 def dither_image(img: Image.Image) -> Image.Image:
-    """Return a six-color PNG-ready image using serpentine Stucki dithering."""
+    """Return a six-color PNG-ready image using OKLab Stucki dithering."""
     rgb = img.convert("RGB")
     width, height = rgb.size
     out = Image.new("RGB", (width, height))
     src = rgb.load()
     dst = out.load()
-    err_current = [0.0] * (width * 3)
-    err_next = [0.0] * (width * 3)
-    err_next2 = [0.0] * (width * 3)
+    pixel_count = width * height
+    err_l = [0.0] * pixel_count
+    err_a = [0.0] * pixel_count
+    err_b = [0.0] * pixel_count
 
     for y in range(height):
-        direction = 1 if y % 2 == 0 else -1
-        x_range = range(width) if direction == 1 else range(width - 1, -1, -1)
-        for x in x_range:
-            i = x * 3
+        for x in range(width):
+            i = y * width + x
             sr, sg, sb = src[x, y]
-            r = _clamp_channel(sr + err_current[i])
-            g = _clamp_channel(sg + err_current[i + 1])
-            b = _clamp_channel(sb + err_current[i + 2])
-            pr, pg, pb = _closest_palette_color(r, g, b)
+            pl_in, pa_in, pb_in = _oklab(sr, sg, sb)
+            raw_l = pl_in + err_l[i]
+            raw_a = pa_in + err_a[i]
+            raw_b = pb_in + err_b[i]
+
+            palette_index = _closest_palette_index(raw_l, raw_a, raw_b)
+            pr, pg, pb = SPECTRA6_PALETTE[palette_index]
             dst[x, y] = (pr, pg, pb)
 
-            er = r - pr
-            eg = g - pg
-            eb = b - pb
-            for offset, weight in STUCKI_CURRENT:
-                _add_error(err_current, width, x + offset * direction, er, eg, eb, weight / STUCKI_DIVISOR)
-            for offset, weight in STUCKI_NEXT:
-                _add_error(err_next, width, x + offset * direction, er, eg, eb, weight / STUCKI_DIVISOR)
-            for offset, weight in STUCKI_NEXT2:
-                _add_error(err_next2, width, x + offset * direction, er, eg, eb, weight / STUCKI_DIVISOR)
-
-        err_current = err_next
-        err_next = err_next2
-        err_next2 = [0.0] * (width * 3)
+            chosen_l, chosen_a, chosen_b = _PALETTE_OKLAB[palette_index]
+            error_l = raw_l - chosen_l
+            error_a = raw_a - chosen_a
+            error_b = raw_b - chosen_b
+            for weight, dx, dy in STUCKI_KERNEL:
+                _add_error(err_l, err_a, err_b, width, height, x + dx, y + dy, error_l, error_a, error_b, weight)
     return out
 
 
