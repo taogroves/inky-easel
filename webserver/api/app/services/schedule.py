@@ -22,9 +22,10 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import get_settings
-from ..content import reddit, rss, weather, xkcd
+from ..content import calendar, reddit, rss, weather, xkcd
 from ..content.renderer import (
     RenderTarget,
+    render_calendar_day,
     render_reddit_magazine,
     render_rss_magazine,
     render_title_body,
@@ -195,6 +196,18 @@ async def _resolve_reddit(target: RenderTarget, config: Optional[dict]) -> bytes
         return await asyncio.to_thread(render_title_body, target, "Reddit", f"Could not fetch subreddit:\n{e}", "RED")
 
 
+async def _resolve_calendar(frame: Frame, target: RenderTarget, config: Optional[dict]) -> bytes:
+    cfg = config or {}
+    calendar_url = str(cfg.get("calendar_url") or cfg.get("ical_url") or "").strip()
+    accent = str(cfg.get("accent") or "BLUE")
+    try:
+        events = await calendar.fetch_today_events(calendar_url, frame.timezone)
+        now_local = localize_datetime(datetime.now(timezone.utc), frame.timezone)
+        return await asyncio.to_thread(render_calendar_day, target, events, accent, now_local.strftime("%A, %b %-d"))
+    except Exception as e:
+        return await asyncio.to_thread(render_title_body, target, "Calendar", f"Could not fetch calendar:\n{e}", "RED")
+
+
 async def _resolve_plugin(
     session: AsyncSession, frame: Frame, item: ScheduleItem
 ) -> Optional[PluginPayload]:
@@ -318,6 +331,9 @@ async def resolve_next_for_frame(
         await _attach_image(session, response, target, png, asset_base_url)
     elif item.item_type == "reddit":
         png = await _resolve_reddit(target, item.config)
+        await _attach_image(session, response, target, png, asset_base_url)
+    elif item.item_type == "calendar":
+        png = await _resolve_calendar(frame, target, item.config)
         await _attach_image(session, response, target, png, asset_base_url)
     elif item.item_type == "static":
         text = (item.config or {}) if item.config else {}

@@ -21,6 +21,7 @@ import qrcode
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from .bitmap_font import draw_text, measure_text
+from .calendar import CalendarEvent
 from .inky_display import dither_image
 from .link_preview import LinkPreview
 from .reddit import REDDIT_ORANGE
@@ -186,6 +187,67 @@ def render_title_body(target: RenderTarget, title: str, body: str, accent: str =
         fx = target.width - (bbox[2] - bbox[0]) - 20
         fy = target.height - 30
         draw.text((fx, fy), footer, fill=INKY_PALETTE["BLACK"], font=footer_font)
+
+    return _finalize_image(img, target)
+
+
+def _event_time_label(event: CalendarEvent) -> str:
+    if event.all_day:
+        return "All day"
+    start = event.starts_at.strftime("%-I:%M %p").lower().replace(":00", "")
+    if not event.ends_at:
+        return start
+    end = event.ends_at.strftime("%-I:%M %p").lower().replace(":00", "")
+    return f"{start}-{end}"
+
+
+def render_calendar_day(
+    target: RenderTarget,
+    events: list[CalendarEvent],
+    accent: str = "BLUE",
+    date_label: str | None = None,
+) -> bytes:
+    img, draw = _new_canvas(target)
+    accent_color = INKY_PALETTE.get(accent, INKY_PALETTE["BLUE"])
+    black = INKY_PALETTE["BLACK"]
+    muted = (95, 95, 95)
+
+    header_h = max(60, target.height // 8)
+    draw.rectangle((0, 0, target.width, header_h), fill=accent_color)
+    title_font = _load_font(32, bold=True)
+    date_font = _load_font(18)
+    today = date_label or datetime.now().strftime("%A, %b %-d")
+    draw.text((20, 10), "Today's Calendar", fill=INKY_PALETTE["WHITE"], font=title_font)
+    draw.text((22, 45), today, fill=INKY_PALETTE["WHITE"], font=date_font)
+
+    if not events:
+        body_font = _load_font(28, bold=True)
+        small_font = _load_font(20)
+        draw.text((30, header_h + 80), "No events today", fill=black, font=body_font)
+        draw.text((32, header_h + 122), "Your calendar is clear.", fill=muted, font=small_font)
+        return _finalize_image(img, target)
+
+    time_font = _load_font(20, bold=True)
+    summary_font = _load_font(23, bold=True)
+    overflow_font = _load_font(17)
+    y = header_h + 22
+    row_h = max(64, (target.height - header_h - 38) // min(len(events), 5))
+    visible_events = events[:5]
+    for event in visible_events:
+        line_y = y + 4
+        draw.rounded_rectangle((24, line_y, 34, min(y + row_h - 10, target.height - 24)), radius=4, fill=accent_color)
+        time_label = _event_time_label(event)
+        draw.text((50, y), time_label, fill=accent_color, font=time_font)
+        lines = _wrap(draw, event.summary, summary_font, target.width - 70)
+        text_y = y + 28
+        for line in lines[:2]:
+            draw.text((50, text_y), line, fill=black, font=summary_font)
+            text_y += 28
+        y += row_h
+
+    hidden = len(events) - len(visible_events)
+    if hidden > 0:
+        draw.text((50, target.height - 28), f"+ {hidden} more today", fill=muted, font=overflow_font)
 
     return _finalize_image(img, target)
 

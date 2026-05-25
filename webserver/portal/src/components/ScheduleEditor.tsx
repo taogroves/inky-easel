@@ -16,6 +16,7 @@ type EditorItem = {
 const PRESETS: Array<{ value: EditorItem["item_type"]; label: string; description: string; defaultSleep: number }> = [
   { value: "inbox", label: "Inbox", description: "Show the next unread message from another user.", defaultSleep: 180 },
   { value: "weather", label: "Weather", description: "Today's conditions with hourly temp, rain chance, wind, and sun times.", defaultSleep: 60 },
+  { value: "calendar", label: "Calendar", description: "Today's events from an iCal calendar link.", defaultSleep: 60 },
   { value: "xkcd", label: "Daily XKCD", description: "The latest XKCD comic.", defaultSleep: 720 },
   { value: "rss", label: "RSS headlines", description: "Magazine-style headlines from any RSS feed (Pimoroni BBC layout).", defaultSleep: 120 },
   { value: "reddit", label: "Reddit", description: "Top posts from a subreddit with QR links (Reddit RSS).", defaultSleep: 120 },
@@ -30,6 +31,7 @@ function blankFor(type: EditorItem["item_type"]): EditorItem {
   if (type === "rss") config = { feed_url: "https://feeds.bbci.co.uk/news/rss.xml" };
   if (type === "reddit") config = { subreddit: "news" };
   if (type === "weather") config = { units: "celsius" };
+  if (type === "calendar") config = { calendar_url: "", accent: "BLUE" };
   return { item_type: type, item_ref: null, config, sleep_minutes: preset.defaultSleep, start_minute: null };
 }
 
@@ -230,6 +232,32 @@ export default function ScheduleEditor({
                         <option value="fahrenheit">Fahrenheit (°F, mph wind)</option>
                       </select>
                     </div>
+                  )}
+
+                  {item.item_type === "calendar" && (
+                    <>
+                      <div className="md:col-span-2">
+                        <label className="label">iCal calendar URL</label>
+                        <input
+                          className="input"
+                          placeholder="https://example.com/calendar.ics"
+                          value={String((item.config as { calendar_url?: string })?.calendar_url ?? "")}
+                          onChange={(e) => update(idx, { config: { ...item.config, calendar_url: e.target.value } })}
+                        />
+                      </div>
+                      <div>
+                        <label className="label">Event color</label>
+                        <select
+                          className="input"
+                          value={String((item.config as { accent?: string })?.accent ?? "BLUE")}
+                          onChange={(e) => update(idx, { config: { ...item.config, accent: e.target.value } })}
+                        >
+                          {["BLUE", "GREEN", "RED", "YELLOW", "BLACK", "ORANGE"].map((c) => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </>
                   )}
 
                   {(item.item_type === "rss" || item.item_type === "bbc") && (
