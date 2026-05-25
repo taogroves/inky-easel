@@ -37,10 +37,10 @@ export default async function FrameDetailPage(props: { params: Promise<{ id: str
           <p className="text-sm text-ink-soft">Handle <code className="rounded bg-ink/5 px-1">{frame.name}</code></p>
         </div>
         <div className="flex gap-2">
-          <Link href={`/dashboard/frames/${frame.id}/configure`} className="btn-primary">Configure</Link>
+          <Link href={`/dashboard/frames/${frame.id}/configure`} className="btn-secondary">Configure</Link>
           <Link href={`/dashboard/frames/${frame.id}/setup`} className="btn-secondary">SD setup</Link>
-          <Link href={`/dashboard/frames/${frame.id}/schedule`} className="btn-secondary">Schedule</Link>
           <Link href={`/dashboard/frames/${frame.id}/inbox`} className="btn-secondary">Inbox</Link>
+          <Link href={`/dashboard/frames/${frame.id}/schedule`} className="btn-primary">Schedule</Link>
         </div>
       </div>
 
@@ -82,6 +82,11 @@ export default async function FrameDetailPage(props: { params: Promise<{ id: str
               </>
             ) : null}
           </dl>
+          <div className="mt-5 flex justify-end border-t border-ink/10 pt-4">
+            <Link href={`/dashboard/frames/${frame.id}/troubleshooting`} className="btn-primary">
+              Troubleshooting
+            </Link>
+          </div>
         </div>
 
         <div className="card">

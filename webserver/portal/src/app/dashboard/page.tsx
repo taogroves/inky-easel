@@ -106,8 +106,8 @@ export default async function DashboardPage() {
                 <div className="mt-2 flex flex-wrap gap-2">
                   <Link className="btn-secondary" href={`/dashboard/frames/${frame.id}`}>Manage</Link>
                   <Link className="btn-secondary" href={`/dashboard/frames/${frame.id}/setup`}>SD setup</Link>
-                  <Link className="btn-secondary" href={`/dashboard/frames/${frame.id}/schedule`}>Schedule</Link>
                   <Link className="btn-secondary" href={`/dashboard/frames/${frame.id}/inbox`}>Inbox</Link>
+                  <Link className="btn-primary" href={`/dashboard/frames/${frame.id}/schedule`}>Schedule</Link>
                 </div>
               </li>
             );
