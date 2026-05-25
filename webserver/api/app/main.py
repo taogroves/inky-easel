@@ -41,6 +41,8 @@ async def _repair_schema() -> None:
     """Keep dev/self-hosted DBs aligned with lightweight schema changes."""
     statements = [
         "ALTER TABLE ie_inbox_item MODIFY image_bytes LONGBLOB NULL",
+        "ALTER TABLE ie_inbox_item ADD COLUMN IF NOT EXISTS thumbnail_mime VARCHAR(64) NULL",
+        "ALTER TABLE ie_inbox_item ADD COLUMN IF NOT EXISTS thumbnail_bytes LONGBLOB NULL",
         "ALTER TABLE ie_content_cache MODIFY payload LONGBLOB NOT NULL",
         "ALTER TABLE ie_frame ADD COLUMN IF NOT EXISTS inbox_mode VARCHAR(16) NOT NULL DEFAULT 'open'",
         "ALTER TABLE ie_frame ADD COLUMN IF NOT EXISTS inbox_password VARCHAR(120) NULL",

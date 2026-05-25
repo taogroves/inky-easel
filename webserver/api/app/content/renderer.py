@@ -98,8 +98,12 @@ def _wrap(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_w
 
 def _finalize_image(img: Image.Image, target: RenderTarget) -> bytes:
     """Apply final six-color Stucki dithering and encode as PNG."""
+    return _encode_png(dither_image(img))
+
+
+def _encode_png(img: Image.Image) -> bytes:
     buf = io.BytesIO()
-    dither_image(img).save(buf, format="PNG", optimize=True)
+    img.convert("RGB").save(buf, format="PNG", compress_level=6)
     return buf.getvalue()
 
 
@@ -130,6 +134,30 @@ def fit_image_to_target(image_bytes: bytes, target: RenderTarget) -> Image.Image
 
 def prepare_inbox_image(image_bytes: bytes, target: RenderTarget) -> bytes:
     return _finalize_image(fit_image_to_target(image_bytes, target), target)
+
+
+def prepare_inbox_source_image(image_bytes: bytes, target: RenderTarget) -> bytes:
+    """Normalize uploads to frame size without final display dithering."""
+    return _encode_png(fit_image_to_target(image_bytes, target))
+
+
+def render_inbox_thumbnail(image_bytes: bytes, *, width: int = 120, height: int = 72) -> bytes:
+    """Return a tiny undithered PNG preview for inbox list rows."""
+    inbound = Image.open(io.BytesIO(image_bytes))
+    inbound = ImageOps.exif_transpose(inbound)
+    if inbound.mode in {"RGBA", "LA"} or (inbound.mode == "P" and "transparency" in inbound.info):
+        transparent = inbound.convert("RGBA")
+        background = Image.new("RGBA", transparent.size, INKY_PALETTE["WHITE"] + (255,))
+        background.alpha_composite(transparent)
+        inbound = background.convert("RGB")
+    else:
+        inbound = inbound.convert("RGB")
+    inbound.thumbnail((width, height), Image.LANCZOS)
+    thumb = Image.new("RGB", (width, height), INKY_PALETTE["WHITE"])
+    ox = (width - inbound.width) // 2
+    oy = (height - inbound.height) // 2
+    thumb.paste(inbound, (ox, oy))
+    return _encode_png(thumb)
 
 
 def render_title_body(target: RenderTarget, title: str, body: str, accent: str = "BLUE",
@@ -173,7 +201,7 @@ def render_inbox_text(target: RenderTarget, sender: str, text: str, when: dateti
     )
 
 
-def render_inbox_image(target: RenderTarget, image_bytes: bytes, sender: str | None) -> bytes:
+def render_inbox_image(target: RenderTarget, image_bytes: bytes, sender: str | None, *, dither: bool = True) -> bytes:
     img = fit_image_to_target(image_bytes, target)
 
     if sender:
@@ -189,7 +217,7 @@ def render_inbox_image(target: RenderTarget, image_bytes: bytes, sender: str | N
                        fill=INKY_PALETTE["WHITE"], outline=INKY_PALETTE["BLACK"])
         draw.text((bx + pad, by + pad), label, fill=INKY_PALETTE["BLACK"], font=footer_font)
 
-    return _finalize_image(img, target)
+    return _finalize_image(img, target) if dither else _encode_png(img)
 
 
 def render_xkcd(target: RenderTarget, image_bytes: bytes, title: str, alt: str | None) -> bytes:
@@ -679,7 +707,7 @@ def _draw_qr_badge(img: Image.Image, x: int, y: int, size: int, payload: str) ->
     _draw_qr_code(img, x, y, size, payload)
 
 
-def render_fullscreen_qr(target: RenderTarget, url: str, title: str = "Open link") -> bytes:
+def render_fullscreen_qr(target: RenderTarget, url: str, title: str = "Open link", *, dither: bool = True) -> bytes:
     img, draw = _new_canvas(target)
     clean = clean_url_for_qr(url)
     margin = max(18, target.width // 40)
@@ -699,18 +727,18 @@ def render_fullscreen_qr(target: RenderTarget, url: str, title: str = "Open link
     for line in lines:
         draw.text((margin, y), line, fill=INKY_PALETTE["BLACK"], font=small_font)
         y += 20
-    return _finalize_image(img, target)
+    return _finalize_image(img, target) if dither else _encode_png(img)
 
 
-def render_link_preview(target: RenderTarget, preview: LinkPreview) -> bytes:
+def render_link_preview(target: RenderTarget, preview: LinkPreview, *, dither: bool = True) -> bytes:
     if preview.is_direct_image and preview.image_bytes:
         img = fit_image_to_target(preview.image_bytes, target)
         qr_size = max(84, min(target.width, target.height) // 5)
         _draw_qr_badge(img, target.width - qr_size - 20, target.height - qr_size - 20, qr_size, preview.final_url)
-        return _finalize_image(img, target)
+        return _finalize_image(img, target) if dither else _encode_png(img)
 
     if not preview.title and not preview.description and not preview.image_bytes:
-        return render_fullscreen_qr(target, preview.final_url)
+        return render_fullscreen_qr(target, preview.final_url, dither=dither)
 
     img, draw = _new_canvas(target)
     margin = max(20, target.width // 36)
@@ -782,7 +810,7 @@ def render_link_preview(target: RenderTarget, preview: LinkPreview) -> bytes:
         draw.text((margin, uy), line, fill=INKY_PALETTE["BLACK"], font=small_font)
         uy += small_font.size + 4
 
-    return _finalize_image(img, target)
+    return _finalize_image(img, target) if dither else _encode_png(img)
 
 
 def _magazine_layout_scale(target: RenderTarget) -> tuple[float, float]:

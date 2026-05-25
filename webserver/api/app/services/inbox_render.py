@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import base64
+import asyncio
+import io
 from datetime import datetime
 from urllib.parse import urlparse
 
-from PIL import UnidentifiedImageError
+from PIL import Image, UnidentifiedImageError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..content.link_preview import LinkPreview, resolve_link_preview
 from ..content.renderer import (
     RenderTarget,
-    prepare_inbox_image,
     render_inbox_image,
     render_inbox_text,
     render_link_preview,
@@ -55,17 +56,17 @@ async def render_inbox_preview(
     target = _preview_target(frame)
 
     if kind == "text":
-        payload = render_inbox_text(
+        payload = await asyncio.to_thread(
+            render_inbox_text,
             target,
-            sender=sender_label or "Friend",
-            text=text_body or "",
-            when=localize_datetime(created_at or datetime.utcnow(), frame.timezone),
+            sender_label or "Friend",
+            text_body or "",
+            localize_datetime(created_at or datetime.utcnow(), frame.timezone),
         )
     elif kind in {"image", "drawing"}:
         if not image_bytes:
             raise ValueError("image is required")
-        stored = prepare_inbox_image(image_bytes, target)
-        payload = render_inbox_image(target, stored, sender_label)
+        payload = await asyncio.to_thread(render_inbox_image, target, image_bytes, sender_label)
     elif kind == "link":
         if not text_body or not text_body.strip():
             raise ValueError("link URL is required")
@@ -81,8 +82,7 @@ async def render_inbox_preview(
                 final_url=cleaned,
                 domain=parsed.netloc[4:] if parsed.netloc.startswith("www.") else parsed.netloc,
             )
-        card = render_link_preview(target, preview)
-        payload = render_inbox_image(target, card, None)
+        payload = await asyncio.to_thread(render_link_preview, target, preview)
     else:
         raise ValueError("Unknown kind")
 
@@ -95,7 +95,7 @@ async def render_stored_item_preview(
     item: InboxItem,
 ) -> tuple[bytes, str]:
     target = _preview_target(frame)
-    payload = render_stored_inbox_item(target, frame, item)
+    payload = await asyncio.to_thread(render_stored_inbox_item, target, frame, item)
     return payload, "image/png"
 
 
@@ -115,7 +115,8 @@ def decode_image_base64(image_base64: str) -> bytes:
 
 def validate_image_bytes(data: bytes) -> None:
     try:
-        prepare_inbox_image(data, target_for("inky_frame_7_spectra"))
+        with Image.open(io.BytesIO(data)) as img:
+            img.verify()
     except UnidentifiedImageError as exc:
         raise ValueError("image is not a supported image") from exc
     except Exception as exc:

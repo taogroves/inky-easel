@@ -44,8 +44,8 @@ export default async function FrameDetailPage(props: { params: Promise<{ id: str
         </div>
       </div>
 
-      <section className="mt-8 grid gap-6 md:grid-cols-2">
-        <div className="card">
+      <section className="mt-8 grid gap-6 md:grid-cols-2 md:items-stretch">
+        <div className="card flex h-full flex-col">
           <h2 className="font-display text-xl">Status</h2>
           <dl className="mt-3 space-y-2 text-sm">
             <div className="flex justify-between"><dt className="text-ink-soft">Connection</dt><dd className={frame.connection_status === "disconnected" ? "text-red-800" : ""}>{statusLabel(frame.connection_status)}</dd></div>
@@ -82,14 +82,14 @@ export default async function FrameDetailPage(props: { params: Promise<{ id: str
               </>
             ) : null}
           </dl>
-          <div className="mt-5 flex justify-end border-t border-ink/10 pt-4">
+          <div className="mt-auto flex justify-end border-t border-ink/10 pt-4">
             <Link href={`/dashboard/frames/${frame.id}/troubleshooting`} className="btn-primary">
               Troubleshooting
             </Link>
           </div>
         </div>
 
-        <div className="card">
+        <div className="card flex h-full flex-col">
           <h2 className="font-display text-xl">Edit details</h2>
           <EditFrameForm frame={frame} />
         </div>

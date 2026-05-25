@@ -7,6 +7,7 @@ the final color quantizer for frame images.
 from __future__ import annotations
 
 import io
+from functools import lru_cache
 
 from PIL import Image
 
@@ -58,11 +59,12 @@ def _linear_to_oklab(r: float, g: float, b: float) -> tuple[float, float, float]
     )
 
 
-def _oklab(r: float, g: float, b: float) -> tuple[float, float, float]:
+@lru_cache(maxsize=65536)
+def _oklab_rgb(r: int, g: int, b: int) -> tuple[float, float, float]:
     return _linear_to_oklab(_srgb_to_linear(r), _srgb_to_linear(g), _srgb_to_linear(b))
 
 
-_PALETTE_OKLAB = tuple(_oklab(*color) for color in SPECTRA6_PALETTE)
+_PALETTE_OKLAB = tuple(_oklab_rgb(*color) for color in SPECTRA6_PALETTE)
 
 
 def _closest_palette_index(l: float, a: float, b: float) -> int:
@@ -115,7 +117,7 @@ def dither_image(img: Image.Image) -> Image.Image:
         for x in range(width):
             i = y * width + x
             sr, sg, sb = src[x, y]
-            pl_in, pa_in, pb_in = _oklab(sr, sg, sb)
+            pl_in, pa_in, pb_in = _oklab_rgb(sr, sg, sb)
             raw_l = pl_in + err_l[i]
             raw_a = pa_in + err_a[i]
             raw_b = pb_in + err_b[i]
@@ -138,5 +140,5 @@ def apply_inky_display(image_bytes: bytes) -> bytes:
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     processed = dither_image(img)
     buf = io.BytesIO()
-    processed.save(buf, format="PNG", optimize=True)
+    processed.save(buf, format="PNG", compress_level=6)
     return buf.getvalue()

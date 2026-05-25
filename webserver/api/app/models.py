@@ -223,6 +223,8 @@ class InboxItem(Base):
     text_body: Mapped[Optional[str]] = mapped_column(Text)
     image_mime: Mapped[Optional[str]] = mapped_column(String(64))
     image_bytes: Mapped[Optional[bytes]] = mapped_column(LONGBLOB)
+    thumbnail_mime: Mapped[Optional[str]] = mapped_column(String(64))
+    thumbnail_bytes: Mapped[Optional[bytes]] = mapped_column(LONGBLOB)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     displayed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     display_count: Mapped[int] = mapped_column(Integer, default=0)

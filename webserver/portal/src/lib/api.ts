@@ -157,6 +157,8 @@ export type InboxItem = {
   kind: "text" | "image" | "link" | "drawing";
   text_body: string | null;
   image_mime: string | null;
+  thumbnail_mime: string | null;
+  thumbnail_data_url: string | null;
   sender_label: string | null;
   created_at: string;
   displayed_at: string | null;

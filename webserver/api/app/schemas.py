@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 from datetime import datetime, timezone
 from typing import Any, Literal, Optional
 
@@ -229,11 +230,21 @@ class InboxItemOut(ApiModel):
     kind: str
     text_body: Optional[str]
     image_mime: Optional[str]
+    thumbnail_mime: Optional[str] = None
+    thumbnail_bytes: Optional[bytes] = Field(default=None, exclude=True)
     sender_label: Optional[str]
     created_at: datetime
     displayed_at: Optional[datetime]
     display_count: int
     archived: bool
+
+    @computed_field
+    @property
+    def thumbnail_data_url(self) -> Optional[str]:
+        if not self.thumbnail_mime or not self.thumbnail_bytes:
+            return None
+        encoded = base64.b64encode(self.thumbnail_bytes).decode("ascii")
+        return f"data:{self.thumbnail_mime};base64,{encoded}"
 
     class Config:
         from_attributes = True

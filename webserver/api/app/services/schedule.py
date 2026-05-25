@@ -12,6 +12,7 @@ The schedule loops indefinitely; if the list is empty we return a friendly
 
 from __future__ import annotations
 
+import asyncio
 import secrets as _secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -122,15 +123,16 @@ async def _resolve_inbox(
         ).scalar_one_or_none()
 
     if item is None:
-        png = render_title_body(
+        png = await asyncio.to_thread(
+            render_title_body,
             target,
-            title="Inbox empty",
-            body="No new messages waiting.\nAsk a friend to send something!",
-            accent="GREEN",
+            "Inbox empty",
+            "No new messages waiting.\nAsk a friend to send something!",
+            "GREEN",
         )
         return png, {"kind": "empty"}
 
-    png = render_stored_inbox_item(target, frame, item)
+    png = await asyncio.to_thread(render_stored_inbox_item, target, frame, item)
 
     item.display_count = (item.display_count or 0) + 1
     item.displayed_at = datetime.utcnow()
@@ -142,11 +144,12 @@ async def _resolve_inbox(
 
 async def _resolve_weather(frame: Frame, target: RenderTarget, config: Optional[dict] = None) -> bytes:
     if frame.latitude is None or frame.longitude is None:
-        return render_title_body(
+        return await asyncio.to_thread(
+            render_title_body,
             target,
-            title="Local Weather",
-            body="No location configured.\nUpdate it in the portal.",
-            accent="BLUE",
+            "Local Weather",
+            "No location configured.\nUpdate it in the portal.",
+            "BLUE",
         )
     units = (config or {}).get("units", "celsius")
     try:
@@ -156,17 +159,17 @@ async def _resolve_weather(frame: Frame, target: RenderTarget, config: Optional[
             frame.timezone,
             units=units,
         )
-        return render_weather(target, data)
+        return await asyncio.to_thread(render_weather, target, data)
     except Exception as e:
-        return render_title_body(target, "Local Weather", f"Could not fetch weather:\n{e}", accent="RED")
+        return await asyncio.to_thread(render_title_body, target, "Local Weather", f"Could not fetch weather:\n{e}", "RED")
 
 
 async def _resolve_xkcd(target: RenderTarget) -> bytes:
     try:
         comic = await xkcd.fetch_xkcd()
-        return render_xkcd(target, comic["img_bytes"], comic["title"], comic.get("alt"))
+        return await asyncio.to_thread(render_xkcd, target, comic["img_bytes"], comic["title"], comic.get("alt"))
     except Exception as e:
-        return render_title_body(target, "XKCD", f"Could not fetch comic:\n{e}", accent="RED")
+        return await asyncio.to_thread(render_title_body, target, "XKCD", f"Could not fetch comic:\n{e}", "RED")
 
 
 async def _resolve_rss(target: RenderTarget, config: Optional[dict]) -> bytes:
@@ -176,9 +179,9 @@ async def _resolve_rss(target: RenderTarget, config: Optional[dict]) -> bytes:
     try:
         payload = await rss.fetch_rss(feed_url)
         title = feed_title or payload.get("title") or rss.DEFAULT_TITLE
-        return render_rss_magazine(target, title, payload.get("items", []))
+        return await asyncio.to_thread(render_rss_magazine, target, title, payload.get("items", []))
     except Exception as e:
-        return render_title_body(target, "RSS", f"Could not fetch feed:\n{e}", accent="RED")
+        return await asyncio.to_thread(render_title_body, target, "RSS", f"Could not fetch feed:\n{e}", "RED")
 
 
 async def _resolve_reddit(target: RenderTarget, config: Optional[dict]) -> bytes:
@@ -187,9 +190,9 @@ async def _resolve_reddit(target: RenderTarget, config: Optional[dict]) -> bytes
     try:
         payload = await reddit.fetch_reddit(subreddit)
         label = payload.get("label") or reddit.display_label(subreddit)
-        return render_reddit_magazine(target, label, payload.get("items", []))
+        return await asyncio.to_thread(render_reddit_magazine, target, label, payload.get("items", []))
     except Exception as e:
-        return render_title_body(target, "Reddit", f"Could not fetch subreddit:\n{e}", accent="RED")
+        return await asyncio.to_thread(render_title_body, target, "Reddit", f"Could not fetch subreddit:\n{e}", "RED")
 
 
 async def _resolve_plugin(

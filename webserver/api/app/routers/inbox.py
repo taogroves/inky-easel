@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 import base64
+import asyncio
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
-from PIL import UnidentifiedImageError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import require_service_user
 from ..content.link_preview import LinkPreview, resolve_link_preview
-from ..content.renderer import prepare_inbox_image, render_link_preview, target_for
+from ..content.renderer import prepare_inbox_source_image, render_inbox_thumbnail, render_link_preview, target_for
 from ..content.url_clean import clean_url_for_qr
 from ..db import get_session
 from ..models import Frame, InboxItem, User
@@ -165,9 +165,12 @@ async def send_inbox(
         if len(data) > MAX_IMAGE_BYTES:
             raise HTTPException(413, f"Image too large (>{MAX_IMAGE_BYTES // 1024} KB)")
         try:
-            item.image_bytes = prepare_inbox_image(data, target)
-        except UnidentifiedImageError:
-            raise HTTPException(422, "image_base64 is not a supported image")
+            validate_image_bytes(data)
+            item.image_bytes = await asyncio.to_thread(prepare_inbox_source_image, data, target)
+            item.thumbnail_bytes = await asyncio.to_thread(render_inbox_thumbnail, item.image_bytes)
+            item.thumbnail_mime = "image/png"
+        except ValueError as e:
+            raise HTTPException(422, f"Could not process image: {e}")
         except Exception as e:
             raise HTTPException(422, f"Could not process image: {e}")
         item.image_mime = "image/png"
@@ -189,7 +192,9 @@ async def send_inbox(
                 domain=parsed.netloc[4:] if parsed.netloc.startswith("www.") else parsed.netloc,
             )
         item.text_body = preview.final_url
-        item.image_bytes = render_link_preview(target, preview)
+        item.image_bytes = await asyncio.to_thread(render_link_preview, target, preview, dither=False)
+        item.thumbnail_bytes = await asyncio.to_thread(render_inbox_thumbnail, item.image_bytes)
+        item.thumbnail_mime = "image/png"
         item.image_mime = "image/png"
     else:  # pragma: no cover - pydantic enforces this
         raise HTTPException(422, "Unknown kind")

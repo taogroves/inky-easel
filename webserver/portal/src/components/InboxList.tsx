@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react";
 
-import InboxItemPreview from "@/components/InboxItemPreview";
 import { archiveInboxAction, deleteInboxAction, unarchiveInboxAction } from "@/lib/actions";
 import type { InboxItem } from "@/lib/api";
 import { formatDateTime } from "@/lib/time";
@@ -88,7 +87,15 @@ export default function InboxList({
             <button className="btn-danger text-xs" onClick={() => remove(item.id)} disabled={pending}>Delete</button>
           </div>
         </div>
-        <InboxItemPreview itemId={item.id} />
+        {item.thumbnail_data_url && (
+          <div className="mt-3">
+            <img
+              src={item.thumbnail_data_url}
+              alt=""
+              className="h-[72px] w-[120px] rounded border border-ink/10 bg-white object-contain"
+            />
+          </div>
+        )}
         {item.kind === "text" && item.text_body && item.text_body.length > 80 && (
           <p className="mt-3 whitespace-pre-wrap text-sm text-ink-soft">{item.text_body}</p>
         )}

@@ -176,6 +176,8 @@ export const inboxItem = mysqlTable(
     textBody: text("text_body"),
     imageMime: varchar("image_mime", { length: 64 }),
     imageBytes: longblob("image_bytes"),
+    thumbnailMime: varchar("thumbnail_mime", { length: 64 }),
+    thumbnailBytes: longblob("thumbnail_bytes"),
     createdAt: datetime("created_at").notNull(),
     displayedAt: datetime("displayed_at"),
     displayCount: int("display_count").default(0).notNull(),
