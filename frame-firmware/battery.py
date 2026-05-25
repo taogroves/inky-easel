@@ -22,11 +22,18 @@ BATTERY_FULL_V = 4.2
 BATTERY_EMPTY_V = 3.2
 LOW_BATTERY_PCT = 20
 CRITICAL_BATTERY_PCT = 10
-USB_ADC_LOW_V = 0.5
 USB_VOLTAGE_THRESHOLD = 4.55
+MIN_PLAUSIBLE_VSYS_V = 2.0
+
+
+def _enable_vsys_adc():
+    if _WL_VSYS_EN is not None:
+        _WL_VSYS_EN.value(1)
+        time.sleep_ms(10)
 
 
 def _read_median_voltage(samples: int) -> float:
+    _enable_vsys_adc()
     readings = []
     for _ in range(samples):
         readings.append(_VSYS.read_u16())
@@ -37,12 +44,17 @@ def _read_median_voltage(samples: int) -> float:
 
 
 def read_voltage(samples: int = 9, rounds: int = 5, delay_ms: int = 200) -> float:
+    samples = max(3, int(samples))
+    rounds = max(3, int(rounds))
     voltages = []
-    rounds = max(1, int(rounds))
     for idx in range(rounds):
         voltages.append(_read_median_voltage(samples))
         if idx < rounds - 1 and delay_ms > 0:
             time.sleep_ms(delay_ms)
+
+    plausible = [v for v in voltages if v >= MIN_PLAUSIBLE_VSYS_V]
+    if len(plausible) >= 3:
+        voltages = plausible
 
     voltages.sort()
     if len(voltages) > 2:
@@ -68,8 +80,8 @@ def read():
 
 
 def is_usb_power(voltage: float) -> bool:
-    """External power: ADC reads near zero on USB, or VSYS well above LiPo."""
-    return voltage < USB_ADC_LOW_V or voltage >= USB_VOLTAGE_THRESHOLD
+    """External power: USB/charge VSYS reads well above LiPo voltage."""
+    return voltage >= USB_VOLTAGE_THRESHOLD
 
 
 def is_low(percent: int, voltage: float = None) -> bool:
