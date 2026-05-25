@@ -16,6 +16,7 @@ type EditorItem = {
 const PRESETS: Array<{ value: EditorItem["item_type"]; label: string; description: string; defaultSleep: number }> = [
   { value: "inbox", label: "Inbox", description: "Show the next unread message from another user.", defaultSleep: 180 },
   { value: "weather", label: "Weather", description: "Today's conditions with hourly temp, rain chance, wind, and sun times.", defaultSleep: 60 },
+  { value: "me_and_you", label: "Me and You", description: "Compare your frame with an opted-in friend's frame.", defaultSleep: 240 },
   { value: "calendar", label: "Calendar", description: "Today's events from an iCal calendar link.", defaultSleep: 60 },
   { value: "xkcd", label: "Daily XKCD", description: "The latest XKCD comic.", defaultSleep: 720 },
   { value: "rss", label: "RSS headlines", description: "Magazine-style headlines from any RSS feed (Pimoroni BBC layout).", defaultSleep: 120 },
@@ -32,6 +33,15 @@ function blankFor(type: EditorItem["item_type"]): EditorItem {
   if (type === "reddit") config = { subreddit: "news" };
   if (type === "weather") config = { units: "celsius" };
   if (type === "calendar") config = { calendar_url: "", accent: "BLUE" };
+  if (type === "me_and_you") {
+    config = {
+      other_frame_handle: "",
+      other_person_name: "Friend",
+      units: "celsius",
+      days_apart_value: 0,
+      days_apart_as_of: new Date().toISOString().slice(0, 10),
+    };
+  }
   return { item_type: type, item_ref: null, config, sleep_minutes: preset.defaultSleep, start_minute: null };
 }
 
@@ -232,6 +242,64 @@ export default function ScheduleEditor({
                         <option value="fahrenheit">Fahrenheit (°F, mph wind)</option>
                       </select>
                     </div>
+                  )}
+
+                  {item.item_type === "me_and_you" && (
+                    <>
+                      <div>
+                        <label className="label">Other frame handle</label>
+                        <input
+                          className="input"
+                          placeholder="friend-frame"
+                          value={String((item.config as { other_frame_handle?: string })?.other_frame_handle ?? "")}
+                          onChange={(e) => update(idx, { config: { ...item.config, other_frame_handle: e.target.value.trim().toLowerCase() } })}
+                        />
+                        <p className="mt-1 text-xs text-ink-soft">
+                          The other frame must enable Me and You sharing in its frame details.
+                        </p>
+                      </div>
+                      <div>
+                        <label className="label">Other person&apos;s name</label>
+                        <input
+                          className="input"
+                          placeholder="Sam"
+                          value={String((item.config as { other_person_name?: string })?.other_person_name ?? "")}
+                          onChange={(e) => update(idx, { config: { ...item.config, other_person_name: e.target.value } })}
+                        />
+                      </div>
+                      <div>
+                        <label className="label">Temperature units</label>
+                        <select
+                          className="input"
+                          value={String((item.config as { units?: string })?.units ?? "celsius")}
+                          onChange={(e) => update(idx, { config: { ...item.config, units: e.target.value } })}
+                        >
+                          <option value="celsius">Celsius (°C)</option>
+                          <option value="fahrenheit">Fahrenheit (°F)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="label">Days apart today</label>
+                        <input
+                          type="number"
+                          className="input"
+                          value={Number((item.config as { days_apart_value?: number })?.days_apart_value ?? 0)}
+                          onChange={(e) => update(idx, { config: { ...item.config, days_apart_value: Number(e.target.value) || 0 } })}
+                        />
+                      </div>
+                      <div>
+                        <label className="label">As of date</label>
+                        <input
+                          type="date"
+                          className="input"
+                          value={String((item.config as { days_apart_as_of?: string })?.days_apart_as_of ?? new Date().toISOString().slice(0, 10))}
+                          onChange={(e) => update(idx, { config: { ...item.config, days_apart_as_of: e.target.value } })}
+                        />
+                        <p className="mt-1 text-xs text-ink-soft">
+                          The displayed count increases by one each day after this date.
+                        </p>
+                      </div>
+                    </>
                   )}
 
                   {item.item_type === "calendar" && (

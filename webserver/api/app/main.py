@@ -48,6 +48,7 @@ async def _repair_schema() -> None:
         "ALTER TABLE ie_frame ADD COLUMN IF NOT EXISTS inbox_password VARCHAR(120) NULL",
         "ALTER TABLE ie_frame ADD COLUMN IF NOT EXISTS inbox_repeat_enabled BOOL NOT NULL DEFAULT 0",
         "ALTER TABLE ie_frame ADD COLUMN IF NOT EXISTS inbox_delete_after_displays INT NULL",
+        "ALTER TABLE ie_frame ADD COLUMN IF NOT EXISTS me_and_you_enabled BOOL NOT NULL DEFAULT 0",
         "ALTER TABLE ie_frame ADD COLUMN IF NOT EXISTS schedule_mode VARCHAR(16) NOT NULL DEFAULT 'relative'",
         "ALTER TABLE ie_frame ADD COLUMN IF NOT EXISTS next_expected_poll_at DATETIME NULL",
         "ALTER TABLE ie_frame ADD COLUMN IF NOT EXISTS disconnected_after DATETIME NULL",

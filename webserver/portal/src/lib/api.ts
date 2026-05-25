@@ -116,6 +116,7 @@ export type Frame = {
   inbox_password: string | null;
   inbox_repeat_enabled: boolean;
   inbox_delete_after_displays: number | null;
+  me_and_you_enabled: boolean;
   last_seen_at: string | null;
   next_expected_poll_at: string | null;
   disconnected_after: string | null;
@@ -136,7 +137,7 @@ export type FrameWithSecret = Frame & { secret: string };
 export type ScheduleItem = {
   id: string;
   position: number;
-  item_type: "inbox" | "weather" | "xkcd" | "rss" | "reddit" | "bbc" | "calendar" | "plugin" | "static";
+  item_type: "inbox" | "weather" | "xkcd" | "rss" | "reddit" | "bbc" | "calendar" | "plugin" | "static" | "me_and_you";
   item_ref: string | null;
   config: Record<string, unknown> | null;
   sleep_minutes: number;

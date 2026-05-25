@@ -104,6 +104,9 @@ export async function updateFrameAction(frameId: string, formData: FormData): Pr
     if (formData.has("inbox_delete_after_displays")) {
       payload.inbox_delete_after_displays = nullableNumber(formData.get("inbox_delete_after_displays"));
     }
+    if (formData.has("me_and_you_enabled")) {
+      payload.me_and_you_enabled = formData.getAll("me_and_you_enabled").includes("on");
+    }
     const frame = await api<FrameWithSecret>(`/api/frames/${frameId}`, { method: "PATCH", body: JSON.stringify(payload) });
     revalidatePath(`/dashboard/frames/${frameId}`);
     revalidatePath("/dashboard");

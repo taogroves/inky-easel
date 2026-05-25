@@ -112,6 +112,7 @@ export const frame = mysqlTable(
     inboxPassword: varchar("inbox_password", { length: 120 }),
     inboxRepeatEnabled: boolean("inbox_repeat_enabled").default(false).notNull(),
     inboxDeleteAfterDisplays: int("inbox_delete_after_displays"),
+    meAndYouEnabled: boolean("me_and_you_enabled").default(false).notNull(),
     lastSeenAt: datetime("last_seen_at"),
     nextExpectedPollAt: datetime("next_expected_poll_at"),
     disconnectedAfter: datetime("disconnected_after"),

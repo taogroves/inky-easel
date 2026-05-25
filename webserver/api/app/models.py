@@ -128,6 +128,7 @@ class Frame(Base):
     inbox_password: Mapped[Optional[str]] = mapped_column(String(120))
     inbox_repeat_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     inbox_delete_after_displays: Mapped[Optional[int]] = mapped_column(Integer)
+    me_and_you_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     last_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     next_expected_poll_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     disconnected_after: Mapped[Optional[datetime]] = mapped_column(DateTime)
@@ -185,7 +186,7 @@ class ScheduleItem(Base):
         String(36), ForeignKey("ie_frame.id", ondelete="CASCADE"), index=True
     )
     position: Mapped[int] = mapped_column(Integer)
-    item_type: Mapped[str] = mapped_column(String(32))  # inbox|weather|xkcd|rss|reddit|bbc|calendar|plugin|static
+    item_type: Mapped[str] = mapped_column(String(32))  # inbox|weather|xkcd|rss|reddit|bbc|calendar|plugin|static|me_and_you
     item_ref: Mapped[Optional[str]] = mapped_column(String(255))
     config: Mapped[Optional[dict]] = mapped_column(JSON)
     sleep_minutes: Mapped[int] = mapped_column(Integer, default=60)

@@ -721,6 +721,165 @@ def render_weather(target: RenderTarget, payload: dict) -> bytes:
     return _finalize_image(img, target)
 
 
+def _me_you_project(latitude: float, longitude: float, box: tuple[int, int, int, int]) -> tuple[int, int]:
+    left, top, right, bottom = box
+    x = left + ((longitude + 180.0) / 360.0) * (right - left)
+    y = top + ((90.0 - latitude) / 180.0) * (bottom - top)
+    return int(max(left, min(right, x))), int(max(top, min(bottom, y)))
+
+
+def _me_you_weather_text(weather: dict) -> str:
+    temp = weather.get("temperature")
+    unit = "F" if weather.get("units") == "fahrenheit" else "C"
+    if isinstance(temp, (int, float)):
+        return f"{int(round(temp))}°{unit} · {weather.get('description', 'Unknown')}"
+    return str(weather.get("description") or "Weather unavailable")
+
+
+def _me_you_temp_delta(current_weather: dict, other_weather: dict) -> str:
+    current = current_weather.get("temperature")
+    other = other_weather.get("temperature")
+    if not isinstance(current, (int, float)) or not isinstance(other, (int, float)):
+        return "Weather difference unavailable"
+    delta = int(round(other - current))
+    if delta == 0:
+        return "Same temperature"
+    unit = "F" if current_weather.get("units") == "fahrenheit" else "C"
+    direction = "warmer" if delta > 0 else "cooler"
+    return f"{abs(delta)}°{unit} {direction} there"
+
+
+def _draw_me_you_card(
+    draw: ImageDraw.ImageDraw,
+    xy: tuple[int, int, int, int],
+    label: str,
+    time_text: str,
+    date_text: str,
+    weather_text: str,
+    *,
+    accent: tuple[int, int, int],
+    scale: float,
+) -> None:
+    x0, y0, x1, y1 = xy
+    draw.rounded_rectangle(xy, radius=int(14 * scale), fill=INKY_PALETTE["WHITE"], outline=accent, width=max(2, int(2 * scale)))
+    label_font = _load_font(max(14, int(18 * scale)), bold=True)
+    time_font = _load_font(max(28, int(42 * scale)), bold=True)
+    detail_font = _load_font(max(12, int(16 * scale)))
+    pad = int(14 * scale)
+    draw.text((x0 + pad, y0 + pad), label, fill=accent, font=label_font)
+    draw.text((x0 + pad, y0 + int(42 * scale)), time_text, fill=INKY_PALETTE["BLACK"], font=time_font)
+    draw.text((x0 + pad, y0 + int(92 * scale)), date_text, fill=INKY_PALETTE["BLACK"], font=detail_font)
+    for line_idx, line in enumerate(_wrap(draw, weather_text, detail_font, x1 - x0 - pad * 2)[:2]):
+        draw.text((x0 + pad, y0 + int(120 * scale) + line_idx * int(20 * scale)), line, fill=INKY_PALETTE["BLACK"], font=detail_font)
+
+
+def _draw_me_you_world_map(
+    draw: ImageDraw.ImageDraw,
+    box: tuple[int, int, int, int],
+    current: dict,
+    other: dict,
+    *,
+    scale: float,
+) -> None:
+    left, top, right, bottom = box
+    draw.rounded_rectangle(box, radius=int(18 * scale), fill=(232, 239, 246), outline=INKY_PALETTE["BLUE"], width=max(2, int(2 * scale)))
+    for frac in (0.25, 0.5, 0.75):
+        y = top + int((bottom - top) * frac)
+        draw.line((left + 8, y, right - 8, y), fill=(205, 215, 225), width=1)
+    for frac in (0.25, 0.5, 0.75):
+        x = left + int((right - left) * frac)
+        draw.line((x, top + 8, x, bottom - 8), fill=(205, 215, 225), width=1)
+
+    land = INKY_PALETTE["GREEN"]
+    # Coarse continent silhouettes keep this self-contained and readable after dithering.
+    shapes = [
+        [(-165, 55), (-130, 70), (-70, 55), (-55, 25), (-95, 10), (-125, 20)],
+        [(-82, 12), (-45, 5), (-55, -55), (-75, -35)],
+        [(-15, 35), (35, 35), (52, 5), (30, -35), (5, -25), (-12, 5)],
+        [(-10, 60), (45, 70), (95, 55), (130, 35), (95, 10), (45, 20)],
+        [(95, 5), (150, 5), (155, -35), (115, -45)],
+    ]
+    for shape in shapes:
+        points = [_me_you_project(lat, lon, box) for lon, lat in shape]
+        draw.polygon(points, fill=land)
+
+    current_point = _me_you_project(float(current["latitude"]), float(current["longitude"]), box)
+    other_point = _me_you_project(float(other["latitude"]), float(other["longitude"]), box)
+    draw.line((*current_point, *other_point), fill=INKY_PALETTE["RED"], width=max(2, int(3 * scale)))
+    for point, color, label in (
+        (current_point, INKY_PALETTE["BLUE"], "You"),
+        (other_point, INKY_PALETTE["RED"], other.get("label", "Friend")),
+    ):
+        radius = max(5, int(7 * scale))
+        draw.ellipse((point[0] - radius, point[1] - radius, point[0] + radius, point[1] + radius), fill=color, outline=INKY_PALETTE["WHITE"], width=2)
+        font = _load_font(max(10, int(12 * scale)), bold=True)
+        draw.text((point[0] + radius + 3, point[1] - radius), str(label)[:12], fill=INKY_PALETTE["BLACK"], font=font)
+
+
+def render_me_and_you(target: RenderTarget, payload: dict) -> bytes:
+    img, draw = _new_canvas(target, "WHITE")
+    scale = min(target.width / 800, target.height / 480)
+    margin = int(22 * scale)
+    title_font = _load_font(max(22, int(34 * scale)), bold=True)
+    meta_font = _load_font(max(13, int(17 * scale)))
+    stat_label_font = _load_font(max(12, int(15 * scale)))
+    stat_font = _load_font(max(20, int(30 * scale)), bold=True)
+
+    title = str(payload.get("title") or "Me + You")
+    draw.text((margin, margin), title, fill=INKY_PALETTE["BLACK"], font=title_font)
+    subtitle = str(payload.get("time_difference") or "")
+    if subtitle:
+        draw.text((margin, margin + int(40 * scale)), subtitle, fill=INKY_PALETTE["BLUE"], font=meta_font)
+
+    current = payload.get("current") or {}
+    other = payload.get("other") or {}
+    map_box = (margin, int(92 * scale), target.width - margin, int(278 * scale))
+    _draw_me_you_world_map(draw, map_box, current, other, scale=scale)
+
+    card_y = int(300 * scale)
+    card_h = int(148 * scale)
+    gap = int(18 * scale)
+    card_w = (target.width - margin * 2 - gap) // 2
+    _draw_me_you_card(
+        draw,
+        (margin, card_y, margin + card_w, card_y + card_h),
+        str(other.get("label") or "Friend"),
+        str(other.get("time") or "--:--"),
+        str(other.get("date") or ""),
+        _me_you_weather_text(other.get("weather") or {}),
+        accent=INKY_PALETTE["RED"],
+        scale=scale,
+    )
+    _draw_me_you_card(
+        draw,
+        (margin + card_w + gap, card_y, target.width - margin, card_y + card_h),
+        "You",
+        str(current.get("time") or "--:--"),
+        str(current.get("date") or ""),
+        _me_you_weather_text(current.get("weather") or {}),
+        accent=INKY_PALETTE["BLUE"],
+        scale=scale,
+    )
+
+    days = payload.get("days_apart")
+    days_text = str(days) if isinstance(days, int) else "--"
+    delta = _me_you_temp_delta(current.get("weather") or {}, other.get("weather") or {})
+    stat_x = target.width - margin - int(190 * scale)
+    stat_y = margin
+    draw.rounded_rectangle(
+        (stat_x, stat_y, target.width - margin, stat_y + int(62 * scale)),
+        radius=int(12 * scale),
+        fill=(250, 244, 220),
+        outline=INKY_PALETTE["YELLOW"],
+        width=max(2, int(2 * scale)),
+    )
+    draw.text((stat_x + int(12 * scale), stat_y + int(8 * scale)), "Days apart", fill=INKY_PALETTE["BLACK"], font=stat_label_font)
+    draw.text((stat_x + int(12 * scale), stat_y + int(27 * scale)), days_text, fill=INKY_PALETTE["RED"], font=stat_font)
+    draw.text((margin, target.height - int(22 * scale)), delta, fill=INKY_PALETTE["BLACK"], font=meta_font)
+
+    return _finalize_image(img, target)
+
+
 def _draw_qr_code(img: Image.Image, ox: int, oy: int, size: int, payload: str) -> None:
     payload = clean_url_for_qr(payload)
     if not payload:

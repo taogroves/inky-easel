@@ -27,6 +27,21 @@ export default function EditFrameForm({ frame }: { frame: FrameWithSecret }) {
         <input id="display_name" name="display_name" className="input" defaultValue={frame.display_name} />
       </div>
       <LocationPicker initialLatitude={frame.latitude} initialLongitude={frame.longitude} initialTimezone={frame.timezone} />
+      <label className="flex items-start gap-3 rounded border border-ink/10 bg-ink/5 p-3 text-sm">
+        <input type="hidden" name="me_and_you_enabled" value="off" />
+        <input
+          type="checkbox"
+          name="me_and_you_enabled"
+          defaultChecked={frame.me_and_you_enabled}
+          className="mt-1"
+        />
+        <span>
+          <span className="block font-medium">Allow Me and You sharing</span>
+          <span className="block text-xs text-ink-soft">
+            Friends who know this frame&apos;s handle can compare time, approximate location, and weather with their frame.
+          </span>
+        </span>
+      </label>
       <button type="submit" className="btn-primary" disabled={pending}>
         {pending ? "Saving..." : "Save changes"}
       </button>

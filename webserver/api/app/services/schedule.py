@@ -22,9 +22,10 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import get_settings
-from ..content import calendar, reddit, rss, weather, xkcd
+from ..content import calendar, me_and_you, reddit, rss, weather, xkcd
 from ..content.renderer import (
     RenderTarget,
+    render_me_and_you,
     render_calendar_day,
     render_reddit_magazine,
     render_rss_magazine,
@@ -208,6 +209,74 @@ async def _resolve_calendar(frame: Frame, target: RenderTarget, config: Optional
         return await asyncio.to_thread(render_title_body, target, "Calendar", f"Could not fetch calendar:\n{e}", "RED")
 
 
+def _has_me_you_location(frame: Frame) -> bool:
+    return (
+        frame.latitude is not None
+        and frame.longitude is not None
+        and bool(frame.timezone)
+    )
+
+
+async def _resolve_me_and_you(
+    session: AsyncSession,
+    frame: Frame,
+    target: RenderTarget,
+    config: Optional[dict],
+) -> bytes:
+    cfg = config or {}
+    handle = me_and_you.normalize_frame_handle(cfg.get("other_frame_handle"))
+    if not handle:
+        return await asyncio.to_thread(
+            render_title_body,
+            target,
+            "Me and You",
+            "Add a friend's frame handle in the schedule item.",
+            "BLUE",
+        )
+    if handle == frame.name:
+        return await asyncio.to_thread(
+            render_title_body,
+            target,
+            "Me and You",
+            "Choose a different frame handle to compare with.",
+            "BLUE",
+        )
+    if not _has_me_you_location(frame):
+        return await asyncio.to_thread(
+            render_title_body,
+            target,
+            "Me and You",
+            "Add this frame's location and timezone before comparing with a friend.",
+            "BLUE",
+        )
+
+    other = (
+        await session.execute(select(Frame).where(Frame.name == handle))
+    ).scalar_one_or_none()
+    if other is None or not other.me_and_you_enabled:
+        return await asyncio.to_thread(
+            render_title_body,
+            target,
+            "Me and You",
+            "That handle is not available for Me and You.\nAsk them to enable sharing on their frame.",
+            "RED",
+        )
+    if not _has_me_you_location(other):
+        return await asyncio.to_thread(
+            render_title_body,
+            target,
+            "Me and You",
+            "The other frame needs a location and timezone before it can be compared.",
+            "BLUE",
+        )
+
+    try:
+        payload = await me_and_you.build_me_and_you_payload(frame, other, cfg)
+        return await asyncio.to_thread(render_me_and_you, target, payload)
+    except Exception as e:
+        return await asyncio.to_thread(render_title_body, target, "Me and You", f"Could not build comparison:\n{e}", "RED")
+
+
 async def _resolve_plugin(
     session: AsyncSession, frame: Frame, item: ScheduleItem
 ) -> Optional[PluginPayload]:
@@ -322,6 +391,9 @@ async def resolve_next_for_frame(
         )
     elif item.item_type == "weather":
         png = await _resolve_weather(frame, target, item.config)
+        await _attach_image(session, response, target, png, asset_base_url)
+    elif item.item_type == "me_and_you":
+        png = await _resolve_me_and_you(session, frame, target, item.config)
         await _attach_image(session, response, target, png, asset_base_url)
     elif item.item_type == "xkcd":
         png = await _resolve_xkcd(target)

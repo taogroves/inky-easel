@@ -128,6 +128,7 @@ class FrameUpdate(ApiModel):
     inbox_password: Optional[str] = Field(default=None, max_length=120)
     inbox_repeat_enabled: Optional[bool] = None
     inbox_delete_after_displays: Optional[int] = Field(default=None, ge=1, le=100)
+    me_and_you_enabled: Optional[bool] = None
 
 
 class FrameOut(ApiModel):
@@ -143,6 +144,7 @@ class FrameOut(ApiModel):
     inbox_password: Optional[str]
     inbox_repeat_enabled: bool
     inbox_delete_after_displays: Optional[int]
+    me_and_you_enabled: bool
     last_seen_at: Optional[datetime]
     next_expected_poll_at: Optional[datetime]
     disconnected_after: Optional[datetime]
@@ -170,7 +172,7 @@ class FrameSecretOut(FrameOut):
 
 
 class ScheduleItemIn(ApiModel):
-    item_type: Literal["inbox", "weather", "xkcd", "rss", "reddit", "bbc", "calendar", "plugin", "static"]
+    item_type: Literal["inbox", "weather", "xkcd", "rss", "reddit", "bbc", "calendar", "plugin", "static", "me_and_you"]
     item_ref: Optional[str] = None
     config: Optional[dict[str, Any]] = None
     sleep_minutes: int = Field(60, ge=1, le=1440)
