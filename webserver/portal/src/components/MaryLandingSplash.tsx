@@ -12,7 +12,7 @@ const messages = [
   "I wanted to replicate the feeling of surprising you with flowers or seeing each other on e-way.",
   "The picture frame you just unboxed contains a small computer and an e-ink display. I made one for myself too.",
   "The idea is we can send each other messages, pictures, links, etc. and our frames will update to show something new every day.",
-  "I plan to send you all the cool photos I take this summer or leave you cute messages.",
+  "I plan to send you all the cool photos I take this summer and leave you cute messages.",
   "So you can always know when I’m thinking about you <3",
   "However…",
   "I have since decided to add a bunch of other features to your frame.",
@@ -21,7 +21,7 @@ const messages = [
   "I built it to last forever, so no matter where you go or what you do it will be useful.",
   "Definitely check out the ‘You and Me’ module.",
   "Anyway, I hope you like it and I wish you the happiest of (belated) birthdays.",
-  "Can’t wait to hold you in my arms again soon (even though it’s car-only behavior).",
+  "Can’t wait to hold you in my arms again soon (even if confined to the car).",
   "Love, Tao",
 ];
 
@@ -32,7 +32,7 @@ type VantaEffect = {
 
 type VantaBirdsFactory = (options: Record<string, unknown>) => VantaEffect;
 
-const SPLASH_CHROME_COLOR = "#eef0f3";
+const SPLASH_CHROME_COLOR = "#f7f4ee";
 
 export default function MaryLandingSplash() {
   const vantaHostRef = useRef<HTMLDivElement | null>(null);
@@ -80,7 +80,7 @@ export default function MaryLandingSplash() {
         mouseControls: true,
         touchControls: true,
         gyroControls: false,
-        backgroundColor: 0xe5e7eb,
+        backgroundColor: 0xf7f4ee,
         backgroundAlpha: 1,
         color1: 0xff0000,
         color2: 0x247eb9,
@@ -154,7 +154,7 @@ export default function MaryLandingSplash() {
 
   return (
     <section
-      className={`${styles.shell} flex bg-[#e5e7eb] px-5 py-8 text-ink sm:px-8 md:items-center md:px-10 md:py-14`}
+      className={`${styles.shell} flex bg-paper px-5 py-8 text-ink sm:px-8 md:items-center md:px-10 md:py-14`}
     >
       <div ref={vantaHostRef} aria-hidden className={styles.vantaLayer} />
       <div aria-hidden className={styles.paperWash} />
@@ -167,7 +167,7 @@ export default function MaryLandingSplash() {
             className="group fixed inset-0 z-10 flex min-h-full w-full cursor-pointer flex-col items-center justify-center px-0 text-center outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-ink/40"
             aria-label="Show the next message"
           >
-            <div className="pointer-events-none mx-4 flex min-h-[min(34rem,84dvh)] w-[calc(100%-2rem)] max-w-5xl flex-col items-center justify-center rounded-[2rem] border border-ink/10 bg-[#e5e7eb]/45 px-5 py-10 shadow-2xl shadow-ink/10 backdrop-blur-[2px] transition group-hover:bg-[#e5e7eb]/55 sm:mx-6 sm:px-10 md:px-16">
+            <div className="pointer-events-none mx-4 flex min-h-[min(34rem,84dvh)] w-[calc(100%-2rem)] max-w-5xl flex-col items-center justify-center rounded-[2rem] border border-ink/10 bg-paper/45 px-5 py-10 shadow-2xl shadow-ink/10 backdrop-blur-[2px] transition group-hover:bg-paper/55 sm:mx-6 sm:px-10 md:px-16">
               <p className="text-xs font-semibold uppercase tracking-[0.35em] text-ink-soft/75">
                 A note for Mary
               </p>
@@ -188,7 +188,7 @@ export default function MaryLandingSplash() {
             </div>
           </button>
         ) : (
-          <div className={`${styles.message} w-full max-w-3xl rounded-[2rem] border border-ink/10 bg-[#e5e7eb]/86 px-6 py-10 text-center shadow-2xl shadow-ink/10 backdrop-blur-sm sm:px-10 md:px-14 md:py-14`}>
+          <div className={`${styles.message} w-full max-w-3xl rounded-[2rem] border border-ink/10 bg-paper/86 px-6 py-10 text-center shadow-2xl shadow-ink/10 backdrop-blur-sm sm:px-10 md:px-14 md:py-14`}>
             <p className="text-xs font-semibold uppercase tracking-[0.35em] text-ink-soft/75">
               Welcome Mary
             </p>
@@ -204,7 +204,7 @@ export default function MaryLandingSplash() {
               </Link>
               <Link
                 href="/sign-in"
-                className="inline-flex items-center justify-center rounded-full border border-ink/20 bg-[#e5e7eb]/80 px-6 py-3 text-sm font-semibold text-ink transition hover:bg-white"
+                className="inline-flex items-center justify-center rounded-full border border-ink/20 bg-paper/80 px-6 py-3 text-sm font-semibold text-ink transition hover:bg-white"
               >
                 Log in
               </Link>

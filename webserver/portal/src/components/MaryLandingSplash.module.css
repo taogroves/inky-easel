@@ -1,6 +1,6 @@
 :global(html.mary-splash-active),
 :global(html.mary-splash-active body) {
-  background-color: #eef0f3;
+  background-color: #f7f4ee;
 }
 
 :global(html.mary-splash-active body) {
@@ -25,7 +25,7 @@
   position: absolute;
   inset: 0;
   z-index: 0;
-  background: #e5e7eb;
+  background: #f7f4ee;
 }
 
 .vantaLayer :global(canvas) {
@@ -37,7 +37,7 @@
   position: absolute;
   inset: 0;
   z-index: 1;
-  background: rgba(229, 231, 235, 0.08);
+  background: rgba(247, 244, 238, 0.08);
   pointer-events: none;
 }
 
