@@ -42,7 +42,7 @@ const developerItems = [
   {
     title: "Frame & portal APIs",
     description:
-      "Frames authenticate and poll for work over a documented API. Use the portal's service endpoints to automate schedules, send messages, and wire Inky Easel into your own tooling.",
+      "Frames authenticate and poll for work over a documented API. Use the portal's service endpoints to automate schedules, send messages, and wire Easel into your own tooling.",
   },
   {
     title: "Open where it counts",
@@ -91,7 +91,7 @@ export default function LandingSplash() {
               Your life on your wall.
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-ink-soft">
-              Inky Easel uses a vibrant e-ink display and powerful configuration tools to create a display for anything you need.
+              Easel uses a vibrant e-ink display and powerful configuration tools to create a display for anything you need.
               Schedule what appears on the wall, send messages between frames, and let
               the display keep you connected for months between charges.
             </p>
@@ -214,7 +214,7 @@ export default function LandingSplash() {
               Extend the frame. Integrate through APIs.
             </h2>
             <p className="mt-4 text-sm leading-relaxed text-paper/75 md:text-base">
-              Inky Easel firmware is open for tinkering. 
+              Easel firmware is open for tinkering. 
               Build on the device, connect through documented APIs, 
               and keep day-to-day management in the product.
             </p>
@@ -245,7 +245,7 @@ export default function LandingSplash() {
               </h2>
               <p className="mt-4 text-ink-soft">
                 E-paper is readable in daylight, gentle at night, and always on without
-                feeling loud. Inky Easel is built for displays you actually want to live with.
+                feeling loud. Easel is built for displays you actually want to live with.
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">

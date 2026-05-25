@@ -23,7 +23,7 @@ export default function NewFramePage() {
         <div>
           <label className="label" htmlFor="name">Frame handle</label>
           <input id="name" name="name" className="input" required pattern="[a-z0-9\-]{3,64}" placeholder="kitchen-frame" />
-          <p className="mt-1 text-xs text-ink-soft">Unique across all of Inky Easel. 3-64 chars, lowercase.</p>
+          <p className="mt-1 text-xs text-ink-soft">Unique across all of Easel. 3-64 chars, lowercase.</p>
         </div>
         <div>
           <label className="label" htmlFor="display_name">Display name</label>

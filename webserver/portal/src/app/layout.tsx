@@ -6,7 +6,7 @@ import { auth } from "@/lib/auth";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Inky Easel",
+  title: "Easel",
   description: "A portal for battery-powered e-paper picture frames",
 };
 
@@ -21,7 +21,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <header className="border-b border-ink/15 bg-paper">
           <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
             <Link href="/" className="text-xl font-display font-semibold tracking-tight">
-              Inky Easel
+              Easel
             </Link>
             <nav className="flex items-center gap-4 text-sm">
               {user ? (
