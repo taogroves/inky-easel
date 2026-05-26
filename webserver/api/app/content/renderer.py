@@ -9,11 +9,13 @@ install fonts-dejavu-core) we use that.
 
 from __future__ import annotations
 
+import base64
 import io
 import math
 import textwrap
 from dataclasses import dataclass
 from datetime import datetime
+from functools import lru_cache
 from typing import Iterable
 from collections.abc import Callable
 
@@ -26,6 +28,7 @@ from .inky_display import dither_image
 from .link_preview import LinkPreview
 from .reddit import REDDIT_ORANGE
 from .url_clean import clean_url_for_qr
+from .world_map_data import WORLD_MAP_PNG_B64
 
 INKY_PALETTE = {
     "BLACK": (0, 0, 0),
@@ -537,8 +540,9 @@ def _render_moon_phase_image(size: int, illumination: float | None, *, waxing: b
     moon = Image.new("RGBA", (diameter, diameter), (0, 0, 0, 0))
     pixels = moon.load()
     phase = _moon_phase_angle(illumination, waxing)
-    cos_p = math.cos(phase)
-    sin_p = math.sin(phase)
+    sun_angle = math.pi - phase
+    sx = math.sin(sun_angle) * (1 if waxing else -1)
+    sz = math.cos(sun_angle)
     grad = math.radians(2.0)
 
     for py in range(diameter):
@@ -548,10 +552,7 @@ def _render_moon_phase_image(size: int, illumination: float | None, *, waxing: b
             if nx * nx + ny * ny > 1.0:
                 continue
             nz = math.sqrt(1.0 - nx * nx - ny * ny)
-            if waxing:
-                metric = cos_p * nx - sin_p * nz
-            else:
-                metric = -cos_p * nx + sin_p * nz
+            metric = sx * nx + sz * nz
             if metric >= grad:
                 t = 1.0
             elif metric <= -grad:
@@ -721,10 +722,72 @@ def render_weather(target: RenderTarget, payload: dict) -> bytes:
     return _finalize_image(img, target)
 
 
-def _me_you_project(latitude: float, longitude: float, box: tuple[int, int, int, int]) -> tuple[int, int]:
+@lru_cache(maxsize=1)
+def _world_map_image() -> Image.Image:
+    return Image.open(io.BytesIO(base64.b64decode(WORLD_MAP_PNG_B64))).convert("RGB")
+
+
+def _wrap_lon(lon: float) -> float:
+    return ((lon + 180.0) % 360.0) - 180.0
+
+
+def _unwrap_lon_near(lon: float, center: float) -> float:
+    unwrapped = lon
+    while unwrapped - center > 180.0:
+        unwrapped -= 360.0
+    while unwrapped - center < -180.0:
+        unwrapped += 360.0
+    return unwrapped
+
+
+def _pin_crop(
+    current_lat: float,
+    current_lon: float,
+    other_lat: float,
+    other_lon: float,
+    aspect: float,
+) -> tuple[float, float, float, float]:
+    other_lon = _unwrap_lon_near(other_lon, current_lon)
+    center_lon = (current_lon + other_lon) / 2.0
+    center_lat = (current_lat + other_lat) / 2.0
+    lon_delta = abs(other_lon - current_lon)
+    lat_delta = abs(other_lat - current_lat)
+
+    # Choose a zoom where the friend pins occupy a stable part of the crop.
+    lon_span = max(50.0, lon_delta / 0.62)
+    lat_span = max(28.0, lat_delta / 0.62)
+    if lon_span / lat_span < aspect:
+        lon_span = lat_span * aspect
+    else:
+        lat_span = lon_span / aspect
+    lon_span = min(360.0, lon_span)
+    lat_span = min(170.0, lat_span)
+
+    min_lat = center_lat - lat_span / 2.0
+    max_lat = center_lat + lat_span / 2.0
+    if min_lat < -85.0:
+        max_lat += -85.0 - min_lat
+        min_lat = -85.0
+    if max_lat > 85.0:
+        min_lat -= max_lat - 85.0
+        max_lat = 85.0
+    return center_lon, min_lat, max_lat, lon_span
+
+
+def _map_point(
+    lat: float,
+    lon: float,
+    center_lon: float,
+    min_lat: float,
+    max_lat: float,
+    lon_span: float,
+    box: tuple[int, int, int, int],
+) -> tuple[int, int]:
     left, top, right, bottom = box
-    x = left + ((longitude + 180.0) / 360.0) * (right - left)
-    y = top + ((90.0 - latitude) / 180.0) * (bottom - top)
+    lon = _unwrap_lon_near(lon, center_lon)
+    min_lon = center_lon - lon_span / 2.0
+    x = left + ((lon - min_lon) / lon_span) * (right - left)
+    y = top + ((max_lat - lat) / (max_lat - min_lat)) * (bottom - top)
     return int(max(left, min(right, x))), int(max(top, min(bottom, y)))
 
 
@@ -774,6 +837,7 @@ def _draw_me_you_card(
 
 
 def _draw_me_you_world_map(
+    img: Image.Image,
     draw: ImageDraw.ImageDraw,
     box: tuple[int, int, int, int],
     current: dict,
@@ -782,29 +846,41 @@ def _draw_me_you_world_map(
     scale: float,
 ) -> None:
     left, top, right, bottom = box
-    draw.rounded_rectangle(box, radius=int(18 * scale), fill=(232, 239, 246), outline=INKY_PALETTE["BLUE"], width=max(2, int(2 * scale)))
-    for frac in (0.25, 0.5, 0.75):
-        y = top + int((bottom - top) * frac)
-        draw.line((left + 8, y, right - 8, y), fill=(205, 215, 225), width=1)
-    for frac in (0.25, 0.5, 0.75):
-        x = left + int((right - left) * frac)
-        draw.line((x, top + 8, x, bottom - 8), fill=(205, 215, 225), width=1)
+    width = right - left
+    height = bottom - top
+    current_lat = float(current["latitude"])
+    current_lon = float(current["longitude"])
+    other_lat = float(other["latitude"])
+    other_lon = float(other["longitude"])
+    aspect = width / max(1, height)
+    center_lon, min_lat, max_lat, lon_span = _pin_crop(current_lat, current_lon, other_lat, other_lon, aspect)
 
-    land = INKY_PALETTE["GREEN"]
-    # Coarse continent silhouettes keep this self-contained and readable after dithering.
-    shapes = [
-        [(-165, 55), (-130, 70), (-70, 55), (-55, 25), (-95, 10), (-125, 20)],
-        [(-82, 12), (-45, 5), (-55, -55), (-75, -35)],
-        [(-15, 35), (35, 35), (52, 5), (30, -35), (5, -25), (-12, 5)],
-        [(-10, 60), (45, 70), (95, 55), (130, 35), (95, 10), (45, 20)],
-        [(95, 5), (150, 5), (155, -35), (115, -45)],
-    ]
-    for shape in shapes:
-        points = [_me_you_project(lat, lon, box) for lon, lat in shape]
-        draw.polygon(points, fill=land)
+    world = _world_map_image()
+    map_w, map_h = world.size
+    repeated = Image.new("RGB", (map_w * 3, map_h), INKY_PALETTE["WHITE"])
+    repeated.paste(world, (0, 0))
+    repeated.paste(world, (map_w, 0))
+    repeated.paste(world, (map_w * 2, 0))
 
-    current_point = _me_you_project(float(current["latitude"]), float(current["longitude"]), box)
-    other_point = _me_you_project(float(other["latitude"]), float(other["longitude"]), box)
+    center_x = ((_wrap_lon(center_lon) + 180.0) / 360.0) * map_w + map_w
+    crop_w = max(8, (lon_span / 360.0) * map_w)
+    crop_h = max(8, ((max_lat - min_lat) / 180.0) * map_h)
+    center_y = ((90.0 - ((min_lat + max_lat) / 2.0)) / 180.0) * map_h
+    crop = repeated.crop((
+        int(center_x - crop_w / 2.0),
+        int(center_y - crop_h / 2.0),
+        int(center_x + crop_w / 2.0),
+        int(center_y + crop_h / 2.0),
+    ))
+    crop = crop.resize((width, height), Image.BICUBIC)
+    radius = int(18 * scale)
+    mask = Image.new("L", (width, height), 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, width, height), radius=radius, fill=255)
+    img.paste(crop, (left, top), mask)
+    draw.rounded_rectangle(box, radius=radius, outline=INKY_PALETTE["BLUE"], width=max(2, int(2 * scale)))
+
+    current_point = _map_point(current_lat, current_lon, center_lon, min_lat, max_lat, lon_span, box)
+    other_point = _map_point(other_lat, other_lon, center_lon, min_lat, max_lat, lon_span, box)
     draw.line((*current_point, *other_point), fill=INKY_PALETTE["RED"], width=max(2, int(3 * scale)))
     for point, color, label in (
         (current_point, INKY_PALETTE["BLUE"], "You"),
@@ -834,7 +910,7 @@ def render_me_and_you(target: RenderTarget, payload: dict) -> bytes:
     current = payload.get("current") or {}
     other = payload.get("other") or {}
     map_box = (margin, int(92 * scale), target.width - margin, int(278 * scale))
-    _draw_me_you_world_map(draw, map_box, current, other, scale=scale)
+    _draw_me_you_world_map(img, draw, map_box, current, other, scale=scale)
 
     card_y = int(300 * scale)
     card_h = int(148 * scale)
