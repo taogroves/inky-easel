@@ -186,7 +186,7 @@ class ScheduleItem(Base):
         String(36), ForeignKey("ie_frame.id", ondelete="CASCADE"), index=True
     )
     position: Mapped[int] = mapped_column(Integer)
-    item_type: Mapped[str] = mapped_column(String(32))  # inbox|weather|xkcd|rss|reddit|bbc|calendar|plugin|static|me_and_you
+    item_type: Mapped[str] = mapped_column(String(32))  # inbox|weather|xkcd|rss|reddit|bbc|calendar|art|plugin|static|me_and_you
     item_ref: Mapped[Optional[str]] = mapped_column(String(255))
     config: Mapped[Optional[dict]] = mapped_column(JSON)
     sleep_minutes: Mapped[int] = mapped_column(Integer, default=60)

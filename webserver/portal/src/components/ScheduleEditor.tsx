@@ -18,6 +18,7 @@ const PRESETS: Array<{ value: EditorItem["item_type"]; label: string; descriptio
   { value: "weather", label: "Weather", description: "Today's conditions with hourly temp, rain chance, wind, and sun times.", defaultSleep: 60 },
   { value: "me_and_you", label: "Me and You", description: "Compare your frame with an opted-in friend's frame.", defaultSleep: 240 },
   { value: "calendar", label: "Calendar", description: "Today's events from an iCal calendar link.", defaultSleep: 60 },
+  { value: "art", label: "Art", description: "Server-generated procedural art, including local night sky maps.", defaultSleep: 180 },
   { value: "xkcd", label: "Daily XKCD", description: "The latest XKCD comic.", defaultSleep: 720 },
   { value: "rss", label: "RSS headlines", description: "Magazine-style headlines from any RSS feed (Pimoroni BBC layout).", defaultSleep: 120 },
   { value: "reddit", label: "Reddit", description: "Top posts from a subreddit with QR links (Reddit RSS).", defaultSleep: 120 },
@@ -33,6 +34,7 @@ function blankFor(type: EditorItem["item_type"]): EditorItem {
   if (type === "reddit") config = { subreddit: "news" };
   if (type === "weather") config = { units: "celsius" };
   if (type === "calendar") config = { calendar_url: "", accent: "BLUE" };
+  if (type === "art") config = { variant: "night_sky", show_labels: true, magnitude: 4.8, palette: "midnight", seed_mode: "daily" };
   if (type === "me_and_you") {
     config = {
       other_frame_handle: "",
@@ -325,6 +327,96 @@ export default function ScheduleEditor({
                           ))}
                         </select>
                       </div>
+                    </>
+                  )}
+
+                  {item.item_type === "art" && (
+                    <>
+                      <div>
+                        <label className="label">Art mode</label>
+                        <select
+                          className="input"
+                          value={String((item.config as { variant?: string })?.variant ?? "mandelbrot")}
+                          onChange={(e) => update(idx, { config: { ...item.config, variant: e.target.value } })}
+                        >
+                          <option value="night_sky">Local night sky map</option>
+                          <option value="mandelbrot">Mandelbrot fractal</option>
+                          <option value="location_rings">Location rings</option>
+                          <option value="wind_field">Vector field</option>
+                        </select>
+                      </div>
+
+                      {String((item.config as { variant?: string })?.variant ?? "mandelbrot") === "night_sky" && (
+                        <>
+                          <div>
+                            <label className="label">Star depth</label>
+                            <input
+                              type="range"
+                              className="w-full"
+                              min={3.5}
+                              max={6.2}
+                              step={0.1}
+                              value={Number((item.config as { magnitude?: number })?.magnitude ?? 4.8)}
+                              onChange={(e) => update(idx, { config: { ...item.config, magnitude: Number(e.target.value) } })}
+                            />
+                            <p className="mt-1 text-xs text-ink-soft">
+                              {Number((item.config as { magnitude?: number })?.magnitude ?? 4.8).toFixed(1)} magnitude limit
+                            </p>
+                          </div>
+                          <label className="mt-6 inline-flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={Boolean((item.config as { show_labels?: boolean })?.show_labels ?? true)}
+                              onChange={(e) => update(idx, { config: { ...item.config, show_labels: e.target.checked } })}
+                            />
+                            Show labels
+                          </label>
+                        </>
+                      )}
+
+                      {String((item.config as { variant?: string })?.variant ?? "mandelbrot") === "mandelbrot" && (
+                        <>
+                          <div>
+                            <label className="label">Palette</label>
+                            <select
+                              className="input"
+                              value={String((item.config as { palette?: string })?.palette ?? "midnight")}
+                              onChange={(e) => update(idx, { config: { ...item.config, palette: e.target.value } })}
+                            >
+                              <option value="midnight">Midnight</option>
+                              <option value="ember">Ember</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="label">Seed cadence</label>
+                            <select
+                              className="input"
+                              value={String((item.config as { seed_mode?: string })?.seed_mode ?? "daily")}
+                              onChange={(e) => update(idx, { config: { ...item.config, seed_mode: e.target.value } })}
+                            >
+                              <option value="daily">Daily</option>
+                              <option value="fixed">Fixed</option>
+                              <option value="poll">Every poll</option>
+                            </select>
+                          </div>
+                          {String((item.config as { seed_mode?: string })?.seed_mode ?? "daily") === "fixed" && (
+                            <div className="md:col-span-2">
+                              <label className="label">Seed</label>
+                              <input
+                                className="input"
+                                value={String((item.config as { seed?: string })?.seed ?? "")}
+                                onChange={(e) => update(idx, { config: { ...item.config, seed: e.target.value } })}
+                              />
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {["night_sky", "location_rings"].includes(String((item.config as { variant?: string })?.variant ?? "mandelbrot")) && (
+                        <p className="md:col-span-2 text-xs text-ink-soft">
+                          This mode uses the frame&apos;s saved latitude, longitude, and timezone.
+                        </p>
+                      )}
                     </>
                   )}
 

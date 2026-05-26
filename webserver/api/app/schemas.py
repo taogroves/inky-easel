@@ -172,7 +172,7 @@ class FrameSecretOut(FrameOut):
 
 
 class ScheduleItemIn(ApiModel):
-    item_type: Literal["inbox", "weather", "xkcd", "rss", "reddit", "bbc", "calendar", "plugin", "static", "me_and_you"]
+    item_type: Literal["inbox", "weather", "xkcd", "rss", "reddit", "bbc", "calendar", "art", "plugin", "static", "me_and_you"]
     item_ref: Optional[str] = None
     config: Optional[dict[str, Any]] = None
     sleep_minutes: int = Field(60, ge=1, le=1440)

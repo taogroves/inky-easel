@@ -22,7 +22,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import get_settings
-from ..content import calendar, me_and_you, reddit, rss, weather, xkcd
+from ..content import art, calendar, me_and_you, reddit, rss, weather, xkcd
 from ..content.renderer import (
     RenderTarget,
     render_me_and_you,
@@ -207,6 +207,59 @@ async def _resolve_calendar(frame: Frame, target: RenderTarget, config: Optional
         return await asyncio.to_thread(render_calendar_day, target, events, accent, now_local.strftime("%A, %b %-d"))
     except Exception as e:
         return await asyncio.to_thread(render_title_body, target, "Calendar", f"Could not fetch calendar:\n{e}", "RED")
+
+
+async def _resolve_art(frame: Frame, target: RenderTarget, config: Optional[dict]) -> bytes:
+    cfg = config or {}
+    variant = str(cfg.get("variant") or "mandelbrot")
+    now_local = localize_datetime(datetime.now(timezone.utc), frame.timezone)
+    needs_location = variant in {"night_sky", "location_rings"}
+    if needs_location and (frame.latitude is None or frame.longitude is None):
+        return await asyncio.to_thread(
+            render_title_body,
+            target,
+            "Art",
+            "This art mode needs the frame's location.\nUpdate it in the portal.",
+            "BLUE",
+        )
+
+    try:
+        if variant == "night_sky":
+            assert frame.latitude is not None and frame.longitude is not None
+            return await asyncio.to_thread(
+                art.render_night_sky,
+                target,
+                latitude=frame.latitude,
+                longitude=frame.longitude,
+                observed_at=now_local,
+                show_labels=bool(cfg.get("show_labels", True)),
+                magnitude=float(cfg.get("magnitude", 4.8)),
+            )
+        if variant == "location_rings":
+            assert frame.latitude is not None and frame.longitude is not None
+            return await asyncio.to_thread(
+                art.render_location_rings,
+                target,
+                latitude=frame.latitude,
+                longitude=frame.longitude,
+                observed_at=now_local,
+            )
+        if variant == "wind_field":
+            return await asyncio.to_thread(
+                art.render_wind_field,
+                target,
+                latitude=frame.latitude,
+                longitude=frame.longitude,
+                observed_at=now_local,
+            )
+        return await asyncio.to_thread(
+            art.render_mandelbrot,
+            target,
+            seed=art.art_seed(cfg, now_local, frame.latitude, frame.longitude),
+            palette=str(cfg.get("palette") or "midnight"),
+        )
+    except Exception as e:
+        return await asyncio.to_thread(render_title_body, target, "Art", f"Could not render art:\n{e}", "RED")
 
 
 def _has_me_you_location(frame: Frame) -> bool:
@@ -406,6 +459,9 @@ async def resolve_next_for_frame(
         await _attach_image(session, response, target, png, asset_base_url)
     elif item.item_type == "calendar":
         png = await _resolve_calendar(frame, target, item.config)
+        await _attach_image(session, response, target, png, asset_base_url)
+    elif item.item_type == "art":
+        png = await _resolve_art(frame, target, item.config)
         await _attach_image(session, response, target, png, asset_base_url)
     elif item.item_type == "static":
         text = (item.config or {}) if item.config else {}
