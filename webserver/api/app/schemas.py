@@ -170,6 +170,10 @@ class FrameOut(ApiModel):
         return image_delivery_for_frame(self.last_has_sd_card)
 
 
+class FrameAdminOut(FrameOut):
+    owner_email: str
+
+
 class FrameSecretOut(FrameOut):
     secret: str
 
@@ -311,7 +315,7 @@ class FirmwareLocalChangeOut(ApiModel):
 
 
 class FirmwareAdminOut(ApiModel):
-    frames: list[FrameOut]
+    frames: list[FrameAdminOut]
     releases: list[FirmwareReleaseOut]
     local_changes: list[FirmwareLocalChangeOut] = Field(default_factory=list)
 

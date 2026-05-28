@@ -199,8 +199,10 @@ export type FirmwareLocalChange = {
   active_size_bytes: number | null;
 };
 
+export type FrameAdmin = Frame & { owner_email: string };
+
 export type FirmwareAdmin = {
-  frames: Frame[];
+  frames: FrameAdmin[];
   releases: FirmwareRelease[];
   local_changes: FirmwareLocalChange[];
 };

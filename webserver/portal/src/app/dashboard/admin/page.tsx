@@ -10,7 +10,7 @@ import {
   verifyAdminPassword,
 } from "@/lib/admin-auth";
 import { auth } from "@/lib/auth";
-import { api, type FirmwareAdmin, type Frame } from "@/lib/api";
+import { api, type FirmwareAdmin, type FrameAdmin } from "@/lib/api";
 import { getDeveloperMode } from "@/lib/developer-mode";
 import { formatDateTime, parseApiDate } from "@/lib/time";
 
@@ -24,7 +24,7 @@ function relativeTime(iso: string | null): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-function firmwareState(frame: Frame, activeVersion: string | null): { label: string; cls: string } {
+function firmwareState(frame: FrameAdmin, activeVersion: string | null): { label: string; cls: string } {
   if (!frame.firmware_version) return { label: "unknown", cls: "bg-amber-100 text-amber-800" };
   if (activeVersion && frame.firmware_version !== activeVersion) {
     return { label: `needs ${activeVersion}`, cls: "bg-red-100 text-red-800" };
@@ -138,6 +138,7 @@ export default async function AdminPage(props: { searchParams: Promise<{ error?:
             <thead className="border-b border-ink/10 text-xs uppercase tracking-wide text-ink-soft">
               <tr>
                 <th className="py-2 pr-4">Frame</th>
+                <th className="py-2 pr-4">Owner</th>
                 <th className="py-2 pr-4">Check-in</th>
                 <th className="py-2 pr-4">Battery</th>
                 <th className="py-2 pr-4">Firmware</th>
@@ -153,6 +154,7 @@ export default async function AdminPage(props: { searchParams: Promise<{ error?:
                       <Link href={`/dashboard/frames/${frame.id}`} className="font-medium hover:underline">{frame.display_name}</Link>
                       <div className="text-xs text-ink-soft">/{frame.name}</div>
                     </td>
+                    <td className="py-3 pr-4 text-ink-soft">{frame.owner_email}</td>
                     <td className="py-3 pr-4">{relativeTime(frame.last_seen_at)}</td>
                     <td className="py-3 pr-4">{frame.last_battery_percent != null ? `${frame.last_battery_percent}%` : "no data"}</td>
                     <td className="py-3 pr-4">
