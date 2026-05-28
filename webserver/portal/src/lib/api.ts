@@ -170,6 +170,7 @@ export type InboxItem = {
 export type SetupBundle = {
   frame: FrameWithSecret;
   files: Record<string, string>;
+  binary_files: string[];
   server_url: string;
 };
 

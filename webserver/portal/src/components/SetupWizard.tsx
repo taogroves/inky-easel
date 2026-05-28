@@ -80,7 +80,12 @@ export default function SetupWizard({
       for (const [name, contents] of Object.entries(bundle.files)) {
         const file = await handle.getFileHandle(name, { create: true });
         const writable = await file.createWritable();
-        await writable.write(contents);
+        if (bundle.binary_files.includes(name)) {
+          const bytes = Uint8Array.from(atob(contents), (c) => c.charCodeAt(0));
+          await writable.write(bytes);
+        } else {
+          await writable.write(contents);
+        }
         await writable.close();
         written += 1;
       }
@@ -93,7 +98,7 @@ export default function SetupWizard({
 
   async function downloadZip() {
     if (!bundle) return;
-    const zipBlob = await buildZip(bundle.files);
+    const zipBlob = await buildZip(bundle.files, bundle.binary_files ?? []);
     const url = URL.createObjectURL(zipBlob);
     const a = document.createElement("a");
     a.href = url;
@@ -270,7 +275,11 @@ export default function SetupWizard({
                   {Object.entries(bundle.files).map(([name, content]) => (
                     <li key={name}>
                       <span className="font-mono">{name}</span>
-                      <pre className="mt-1 max-h-40 overflow-auto rounded bg-white p-2 text-[10px] leading-snug">{content.slice(0, 800)}{content.length > 800 ? "\n... (truncated)" : ""}</pre>
+                      {bundle.binary_files.includes(name) ? (
+                        <p className="mt-1 text-ink-soft">Binary file ({Math.round(content.length * 0.75 / 1024)} KB)</p>
+                      ) : (
+                        <pre className="mt-1 max-h-40 overflow-auto rounded bg-white p-2 text-[10px] leading-snug">{content.slice(0, 800)}{content.length > 800 ? "\n... (truncated)" : ""}</pre>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -360,14 +369,16 @@ function dosTime(d = new Date()): { time: number; date: number } {
   return { time, date };
 }
 
-async function buildZip(files: Record<string, string>): Promise<Blob> {
+async function buildZip(files: Record<string, string>, binaryFiles: string[] = []): Promise<Blob> {
   const encoder = new TextEncoder();
   const parts: BlobPart[] = [];
   const central: Uint8Array[] = [];
   let offset = 0;
 
   for (const [name, contents] of Object.entries(files)) {
-    const data = encoder.encode(contents);
+    const data = binaryFiles.includes(name)
+      ? Uint8Array.from(atob(contents), (c) => c.charCodeAt(0))
+      : encoder.encode(contents);
     const nameBytes = encoder.encode(name);
     const { time, date } = dosTime();
     const crc = crc32(data);

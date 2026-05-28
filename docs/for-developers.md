@@ -69,7 +69,7 @@ Wi-Fi passwords are **never persisted in the database**:
 - Initial SD setup writes credentials only to the SD card.
 - Configure mode keeps passwords in server **memory** for the duration of the session, then clears them.
 
-Canonical storage: `/sd/inky_easel_config.json` (up to 5 networks, active index, server URL).
+Canonical storage: `/sd/inky_easel_config.json` (up to 3 networks, active index, server URL).
 
 Legacy fallback: `/sd/secrets.py` for older bundles.
 
@@ -168,7 +168,7 @@ Re-flash after major firmware changes when running without an SD card.
 
 4. **Configuration mode handshake** — Remote Wi-Fi changes without physical SD access, with explicit user initiation (reset required).
 
-5. **Multi-network failover** — Up to five stored networks plus on-device button selection when connect fails.
+5. **Multi-network failover** — Up to three stored networks plus on-device button selection when connect fails.
 
 6. **Battery-aware behavior** — Critical threshold skips network entirely; low threshold shows overlay but continues.
 

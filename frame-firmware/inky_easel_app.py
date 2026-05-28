@@ -96,20 +96,18 @@ def _reset_cleanly():
     machine.reset()
 
 
-BUTTONS = (
-    inky_frame.button_a,
+WIFI_SELECTION_BUTTONS = (
     inky_frame.button_b,
     inky_frame.button_c,
     inky_frame.button_d,
-    inky_frame.button_e,
 )
 WIFI_SELECTION_MARKER = "/sd/_wifi_select_mode"
 WIFI_CONNECT_ATTEMPTS = 3
 WIFI_CONNECT_RETRY_SEC = 2
 
 
-def _button_wake_index():
-    for idx, button in enumerate(BUTTONS):
+def _wifi_selection_wake_index():
+    for idx, button in enumerate(WIFI_SELECTION_BUTTONS):
         try:
             if button.raw():
                 return idx
@@ -145,7 +143,7 @@ def _clear_wifi_selection_pending():
 def _maybe_switch_wifi_from_button(wakeup):
     if wakeup != "button" or not _wifi_selection_pending():
         return
-    idx = _button_wake_index()
+    idx = _wifi_selection_wake_index()
     _clear_wifi_selection_pending()
     credentials = wifi_config.get_credentials()
     if idx is None or idx >= len(credentials):
@@ -302,13 +300,13 @@ def _show_wifi_selection_and_sleep(graphics, width, height, voltage):
     _update_display(graphics)
     _mark_wifi_selection_pending()
     ih.all_leds_off()
-    for idx, button in enumerate(BUTTONS):
+    for idx, button in enumerate(WIFI_SELECTION_BUTTONS):
         if idx < len(credentials):
             button.led_on()
     if ih.is_usb_power(voltage):
         print("USB power: waiting forever for Wi-Fi selection button")
         while True:
-            for idx, button in enumerate(BUTTONS):
+            for idx, button in enumerate(WIFI_SELECTION_BUTTONS):
                 if idx < len(credentials) and button.read():
                     wifi_config.set_active_wifi_index(idx)
                     _clear_wifi_selection_pending()

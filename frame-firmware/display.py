@@ -11,6 +11,7 @@ ORANGE = inky_frame.ORANGE
 YELLOW = inky_frame.YELLOW
 GREEN = inky_frame.GREEN
 BLUE = inky_frame.BLUE
+WIFI_UNAVAILABLE_IMAGE_PATHS = ("/sd/wifi_unavailable.png", "/wifi_unavailable.png", "wifi_unavailable.png")
 
 
 def clear(graphics, color=WHITE):
@@ -138,6 +139,9 @@ def draw_configuration_screen(graphics, width, height, status="listening"):
 
 
 def draw_wifi_selection_screen(graphics, width, height, credentials):
+    if _draw_wifi_unavailable_image(graphics):
+        return
+
     graphics.set_pen(WHITE)
     graphics.clear()
     graphics.set_font("bitmap8")
@@ -152,7 +156,7 @@ def draw_wifi_selection_screen(graphics, width, height, credentials):
     graphics.set_pen(BLACK)
     _wrap_text(
         graphics,
-        "Press a lower button to switch networks, then the frame will try again.",
+        "Follow an arrow to a stored network, then press that lower button.",
         28,
         104,
         width - 56,
@@ -160,24 +164,55 @@ def draw_wifi_selection_screen(graphics, width, height, credentials):
         6,
     )
 
-    labels = ["A", "B", "C", "D", "E"]
     slot_w = width // 5
-    y = height - 116
-    for idx in range(5):
-        x = idx * slot_w
-        graphics.set_pen(BLACK)
-        graphics.rectangle(x + 6, y, slot_w - 12, 4)
-        graphics.set_pen(BLUE if idx < len(credentials) else BLACK)
-        graphics.text(labels[idx], x + 14, y + 18, slot_w - 20, 3)
+    y = height - 132
+    button_positions = (1, 2, 3)
+    for idx, button_pos in enumerate(button_positions):
+        x = button_pos * slot_w
         graphics.set_pen(BLACK)
         ssid = ""
         if idx < len(credentials):
             ssid = str(credentials[idx].get("ssid") or "")
-            if len(ssid) > 13:
-                ssid = ssid[:12] + "."
         else:
             ssid = "-"
-        graphics.text(ssid, x + 14, y + 54, slot_w - 20, 2)
+        label_w = slot_w - 16
+        ssid = _fit_text(graphics, ssid, label_w, 2)
+        graphics.text(ssid, x + 8, y, label_w, 2)
+        if idx >= len(credentials):
+            continue
+        cx = x + slot_w // 2
+        arrow_top = y + 34
+        arrow_bottom = height - 18
+        graphics.set_pen(BLUE)
+        graphics.rectangle(cx - 2, arrow_top, 5, arrow_bottom - arrow_top)
+        graphics.line(cx, arrow_bottom, cx - 12, arrow_bottom - 14)
+        graphics.line(cx, arrow_bottom, cx + 12, arrow_bottom - 14)
+
+
+def _draw_wifi_unavailable_image(graphics):
+    try:
+        import pngdec
+        from pngdec import PNG
+    except ImportError:
+        return False
+
+    for path in WIFI_UNAVAILABLE_IMAGE_PATHS:
+        try:
+            png = PNG(graphics)
+            png.open_file(path)
+            png.decode(0, 0, mode=pngdec.PNG_POSTERISE)
+            return True
+        except Exception:
+            pass
+    return False
+
+
+def _fit_text(graphics, text, max_w, scale):
+    if graphics.measure_text(text, scale) <= max_w:
+        return text
+    while text and graphics.measure_text(text + ".", scale) > max_w:
+        text = text[:-1]
+    return text + "." if text else "."
 
 
 def _wrap_text(graphics, text, x, y, max_w, scale, spacing):

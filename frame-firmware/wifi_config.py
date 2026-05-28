@@ -3,7 +3,7 @@
 import json
 
 CONFIG_PATH = "/sd/inky_easel_config.json"
-MAX_CREDENTIALS = 5
+MAX_CREDENTIALS = 3
 
 
 def _default_server_url():

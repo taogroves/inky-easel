@@ -95,8 +95,8 @@ const SECTIONS: Section[] = [
         </p>
         <h4 className="mt-4 font-medium">On-frame picker</h4>
         <p className="mt-2 text-sm text-ink-soft">
-          When the display shows <strong>WI-FI UNAVAILABLE</strong>, press buttons A through E to switch among
-          up to five stored networks, then the frame retries automatically.
+          When the display shows <strong>WI-FI UNAVAILABLE</strong>, press the lower button beneath a network
+          name to switch among up to three stored networks, then the frame retries automatically.
         </p>
       </>
     ),
@@ -140,7 +140,7 @@ const SECTIONS: Section[] = [
             </tr>
             <tr className="border-b border-ink/5">
               <td className="py-2 pr-4 align-top font-medium text-ink">WI-FI UNAVAILABLE</td>
-              <td className="py-2 align-top">Press A–E to try another network, or update Wi-Fi via Configure.</td>
+              <td className="py-2 align-top">Press the lower button beneath a network name, or update Wi-Fi via Configure.</td>
             </tr>
             <tr className="border-b border-ink/5">
               <td className="py-2 pr-4 align-top font-medium text-ink">CONFIGURATION MODE</td>

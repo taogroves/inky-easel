@@ -45,13 +45,13 @@ The disconnect grace window is based on the frame's sleep duration (roughly 25% 
 
 ### WI-FI UNAVAILABLE
 
-**Display:** Red banner with button slots A–E showing stored network names.
+**Display:** Red banner with arrows pointing from stored network names to the lower buttons.
 
 **Cause:** Wi-Fi connection failed after three attempts (2-second retries).
 
 **Fix:**
 
-1. Press **A–E** to switch to another stored network, or
+1. Press the lower button below a network name to switch to another stored network, or
 2. Use portal **Configure** to update credentials, or
 3. Re-run **SD setup** if you cannot reach the portal
 

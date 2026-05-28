@@ -14,6 +14,8 @@ type SavePayload = {
   firmware_release_id: string | null;
 };
 
+const MAX_WIFI_CREDENTIALS = 3;
+
 function blankCredential(): WifiCredential {
   return { ssid: "", password: "" };
 }
@@ -22,7 +24,7 @@ function cleanCredentials(credentials: WifiCredential[]): WifiCredential[] {
   return credentials
     .map((item) => ({ ssid: item.ssid.trim(), password: item.password }))
     .filter((item) => item.ssid)
-    .slice(0, 5);
+    .slice(0, MAX_WIFI_CREDENTIALS);
 }
 
 export default function FrameConfigureClient({
@@ -52,8 +54,9 @@ export default function FrameConfigureClient({
 
   useEffect(() => {
     if (!session.observed || hydratedFromFrame) return;
-    setCredentials(session.observed.wifi_credentials.length ? session.observed.wifi_credentials : [blankCredential()]);
-    setActiveWifiIndex(session.observed.active_wifi_index);
+    const observedCredentials = session.observed.wifi_credentials.slice(0, MAX_WIFI_CREDENTIALS);
+    setCredentials(observedCredentials.length ? observedCredentials : [blankCredential()]);
+    setActiveWifiIndex(Math.min(session.observed.active_wifi_index, Math.max(0, observedCredentials.length - 1)));
     setServerUrl(session.observed.server_url);
     setHydratedFromFrame(true);
   }, [hydratedFromFrame, session.observed]);
@@ -206,7 +209,7 @@ export default function FrameConfigureClient({
                 <button
                   className="btn-secondary"
                   type="button"
-                  disabled={credentials.length >= 5}
+                  disabled={credentials.length >= MAX_WIFI_CREDENTIALS}
                   onClick={() => setCredentials([...credentials, blankCredential()])}
                 >
                   Add network

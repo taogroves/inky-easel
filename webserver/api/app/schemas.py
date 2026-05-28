@@ -10,6 +10,9 @@ from pydantic import BaseModel, Field, computed_field, field_serializer
 
 from .services.image_delivery import ImageDeliveryOut, image_delivery_for_frame
 
+MAX_WIFI_CREDENTIALS = 3
+MAX_WIFI_INDEX = MAX_WIFI_CREDENTIALS - 1
+
 
 def _utc_json(value: datetime) -> str:
     if value.tzinfo is None:
@@ -38,15 +41,15 @@ class WifiCredential(ApiModel):
 class FrameConfigurationReport(ApiModel):
     status: Literal["available", "applied", "error"] = "available"
     message: Optional[str] = None
-    wifi_credentials: list[WifiCredential] = Field(default_factory=list, max_length=5)
-    active_wifi_index: int = Field(0, ge=0, le=4)
+    wifi_credentials: list[WifiCredential] = Field(default_factory=list, max_length=MAX_WIFI_CREDENTIALS)
+    active_wifi_index: int = Field(0, ge=0, le=MAX_WIFI_INDEX)
     server_url: str = Field("", max_length=256)
     firmware_version: Optional[str] = None
 
 
 class FrameConfigurationDesired(ApiModel):
-    wifi_credentials: list[WifiCredential] = Field(default_factory=list, min_length=1, max_length=5)
-    active_wifi_index: int = Field(0, ge=0, le=4)
+    wifi_credentials: list[WifiCredential] = Field(default_factory=list, min_length=1, max_length=MAX_WIFI_CREDENTIALS)
+    active_wifi_index: int = Field(0, ge=0, le=MAX_WIFI_INDEX)
     server_url: str = Field(..., min_length=1, max_length=256)
 
 
@@ -263,6 +266,7 @@ class FramePublicOut(ApiModel):
 class SetupBundleOut(ApiModel):
     frame: FrameSecretOut
     files: dict[str, str]
+    binary_files: list[str] = Field(default_factory=list)
     server_url: str
 
 

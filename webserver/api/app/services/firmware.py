@@ -8,6 +8,7 @@ metadata and file contents live in the configured MongoDB/SCRAM datastore.
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
 import json
 import logging
@@ -42,6 +43,10 @@ FIRMWARE_FILES = [
     "wifi_config.py",
 ]
 
+FIRMWARE_BINARY_FILES = [
+    "wifi_unavailable.png",
+]
+
 
 @dataclass
 class FirmwareFileDoc:
@@ -49,6 +54,7 @@ class FirmwareFileDoc:
     sha256: str
     size_bytes: int
     content: str = ""
+    binary: bool = False
 
 
 @dataclass
@@ -91,6 +97,17 @@ def source_files() -> dict[str, str]:
     return files
 
 
+def source_binary_files() -> dict[str, bytes]:
+    root = firmware_dir()
+    files: dict[str, bytes] = {}
+    for name in FIRMWARE_BINARY_FILES:
+        path = root / name
+        if not path.exists():
+            raise FileNotFoundError(name)
+        files[name] = path.read_bytes()
+    return files
+
+
 def _source_files_best_effort() -> dict[str, str]:
     root = firmware_dir()
     files: dict[str, str] = {}
@@ -101,15 +118,39 @@ def _source_files_best_effort() -> dict[str, str]:
     return files
 
 
+def _source_binary_files_best_effort() -> dict[str, bytes]:
+    root = firmware_dir()
+    files: dict[str, bytes] = {}
+    for name in FIRMWARE_BINARY_FILES:
+        path = root / name
+        if path.exists():
+            files[name] = path.read_bytes()
+    return files
+
+
 def _sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def manifest_hash(files: dict[str, str]) -> str:
-    manifest = [
+def _sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _manifest_entries(
+    files: dict[str, str],
+    binary_files: dict[str, bytes] | None = None,
+) -> list[dict[str, int | str]]:
+    entries = [
         {"path": path, "sha256": _sha256(content), "size_bytes": len(content.encode("utf-8"))}
         for path, content in sorted(files.items())
     ]
+    for path, data in sorted((binary_files or {}).items()):
+        entries.append({"path": path, "sha256": _sha256_bytes(data), "size_bytes": len(data)})
+    return entries
+
+
+def manifest_hash(files: dict[str, str], binary_files: dict[str, bytes] | None = None) -> str:
+    manifest = _manifest_entries(files, binary_files)
     return hashlib.sha256(json.dumps(manifest, sort_keys=True).encode("utf-8")).hexdigest()
 
 
@@ -141,6 +182,7 @@ def _release_from_doc(doc: dict[str, Any] | None) -> FirmwareReleaseDoc | None:
             sha256=str(item["sha256"]),
             size_bytes=int(item["size_bytes"]),
             content=str(item.get("content", "")),
+            binary=bool(item.get("binary", False)),
         )
         for item in doc.get("files", [])
     ]
@@ -180,6 +222,41 @@ def _file_doc(path: str, content: str) -> FirmwareFileDoc:
     )
 
 
+def _binary_file_doc(path: str, data: bytes) -> FirmwareFileDoc:
+    return FirmwareFileDoc(
+        path=path,
+        sha256=_sha256_bytes(data),
+        size_bytes=len(data),
+        content=base64.b64encode(data).decode("ascii"),
+        binary=True,
+    )
+
+
+def _release_file_entries(files: dict[str, str], binary_files: dict[str, bytes]) -> list[dict[str, str | int | bool]]:
+    entries: list[dict[str, str | int | bool]] = []
+    for path, content in sorted(files.items()):
+        entries.append(
+            {
+                "path": path,
+                "content": content,
+                "sha256": _sha256(content),
+                "size_bytes": len(content.encode("utf-8")),
+                "binary": False,
+            }
+        )
+    for path, data in sorted(binary_files.items()):
+        entries.append(
+            {
+                "path": path,
+                "content": base64.b64encode(data).decode("ascii"),
+                "sha256": _sha256_bytes(data),
+                "size_bytes": len(data),
+                "binary": True,
+            }
+        )
+    return entries
+
+
 async def compare_local_to_active_release() -> list[FirmwareLocalChangeDoc]:
     release = await latest_active_release()
     if release is None:
@@ -187,8 +264,10 @@ async def compare_local_to_active_release() -> list[FirmwareLocalChangeDoc]:
 
     local = _source_files_best_effort()
     local["firmware_version.py"] = _version_file(release.version)
+    local_binary = _source_binary_files_best_effort()
 
     local_files = {path: _file_doc(path, content) for path, content in local.items()}
+    local_files.update({path: _binary_file_doc(path, data) for path, data in local_binary.items()})
     active_files = {file.path: file for file in release.files}
     changes: list[FirmwareLocalChangeDoc] = []
     for path in sorted(set(local_files) | set(active_files)):
@@ -279,6 +358,7 @@ async def create_release_from_source(
     activate: bool = True,
 ) -> FirmwareReleaseDoc:
     files = source_files()
+    binary_files = source_binary_files()
     files["firmware_version.py"] = _version_file(version)
     now = datetime.utcnow()
     doc = {
@@ -286,18 +366,10 @@ async def create_release_from_source(
         "version": version,
         "notes": notes,
         "active": False,
-        "manifest_hash": manifest_hash(files),
+        "manifest_hash": manifest_hash(files, binary_files),
         "created_by_user_id": user.id,
         "created_at": now,
-        "files": [
-            {
-                "path": path,
-                "content": content,
-                "sha256": _sha256(content),
-                "size_bytes": len(content.encode("utf-8")),
-            }
-            for path, content in sorted(files.items())
-        ],
+        "files": _release_file_entries(files, binary_files),
     }
 
     def _create() -> FirmwareReleaseDoc:
@@ -367,6 +439,7 @@ async def get_firmware_file(release_id: str, path: str) -> FirmwareFileDoc | Non
             sha256=str(item["sha256"]),
             size_bytes=int(item["size_bytes"]),
             content=str(item.get("content", "")),
+            binary=bool(item.get("binary", False)),
         )
 
     try:

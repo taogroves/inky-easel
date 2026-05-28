@@ -7,6 +7,7 @@ the user's SD card via the File System Access API (or downloads a ZIP).
 
 from __future__ import annotations
 
+import base64
 import json
 from urllib.parse import urlparse
 
@@ -20,7 +21,12 @@ from ..config import get_settings
 from ..db import get_session
 from ..models import Frame, User
 from ..schemas import FrameSecretOut, SetupBundleOut
-from ..services.firmware import FIRMWARE_FILES, firmware_dir, latest_active_release
+from ..services.firmware import (
+    FIRMWARE_BINARY_FILES,
+    FIRMWARE_FILES,
+    firmware_dir,
+    latest_active_release,
+)
 
 router = APIRouter(prefix="/api/setup", tags=["setup"])
 
@@ -83,6 +89,42 @@ def _render_config(frame: Frame, server_url: str) -> str:
     )
 
 
+async def _load_firmware_bundle_files() -> tuple[dict[str, str], list[str]]:
+    files: dict[str, str] = {}
+    binary_files: list[str] = []
+    root = firmware_dir()
+    release = await latest_active_release()
+
+    if release:
+        for entry in release.files:
+            files[entry.path] = entry.content
+            if entry.binary:
+                binary_files.append(entry.path)
+        for name in FIRMWARE_FILES:
+            if name not in files and (root / name).exists():
+                files[name] = (root / name).read_text(encoding="utf-8")
+        for name in FIRMWARE_BINARY_FILES:
+            if name not in files and (root / name).exists():
+                data = (root / name).read_bytes()
+                files[name] = base64.b64encode(data).decode("ascii")
+                binary_files.append(name)
+        return files, sorted(set(binary_files))
+
+    for name in FIRMWARE_FILES:
+        path = root / name
+        if not path.exists():
+            raise HTTPException(500, f"Firmware source missing: {name}")
+        files[name] = path.read_text(encoding="utf-8")
+    for name in FIRMWARE_BINARY_FILES:
+        path = root / name
+        if not path.exists():
+            raise HTTPException(500, f"Firmware source missing: {name}")
+        data = path.read_bytes()
+        files[name] = base64.b64encode(data).decode("ascii")
+        binary_files.append(name)
+    return files, sorted(set(binary_files))
+
+
 @router.post("/{frame_id}/bundle", response_model=SetupBundleOut)
 async def build_bundle(
     frame_id: str,
@@ -99,21 +141,7 @@ async def build_bundle(
     settings = get_settings()
     server_url = body.server_url or settings.public_base_url.rstrip("/")
 
-    files: dict[str, str] = {}
-    release = await latest_active_release()
-    if release:
-        files.update({file.path: file.content for file in release.files})
-        root = firmware_dir()
-        for name in FIRMWARE_FILES:
-            if name not in files and (root / name).exists():
-                files[name] = (root / name).read_text(encoding="utf-8")
-    else:
-        root = firmware_dir()
-        for name in FIRMWARE_FILES:
-            path = root / name
-            if not path.exists():
-                raise HTTPException(500, f"Firmware source missing: {name}")
-            files[name] = path.read_text(encoding="utf-8")
+    files, binary_files = await _load_firmware_bundle_files()
 
     files["secrets.py"] = _render_secrets(body)
     files["inky_easel_config.json"] = _render_wifi_config(body, server_url)
@@ -135,5 +163,6 @@ async def build_bundle(
     return SetupBundleOut(
         frame=FrameSecretOut.model_validate(frame, from_attributes=True),
         files=files,
+        binary_files=binary_files,
         server_url=server_url,
     )

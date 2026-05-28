@@ -24,14 +24,19 @@ BUNDLE_NAMES = frozenset(
         "flash_loader_main.py",
         "inky_easel_app.py",
         "frame_client.py",
+        "firmware_updater.py",
         "battery.py",
         "display.py",
         "inky_helper.py",
+        "wifi_config.py",
+        "wifi_unavailable.png",
         "secrets.py",
         "frame_config.py",
         "README.txt",
     }
 )
+
+BINARY_BUNDLE_SUFFIXES = frozenset({".png"})
 
 # Copied to internal flash for SD-less installs (flash_loader stays SD-only).
 FLASH_APP_FILES = frozenset(BUNDLE_NAMES - {"flash_loader_main.py", "README.txt"})
@@ -65,8 +70,8 @@ def list_devices(mpremote: str) -> None:
     subprocess.run([mpremote, "connect", "list"], check=False)
 
 
-def load_bundle(path: Path) -> dict[str, str]:
-    """Return {filename: text} from a portal bundle directory or ZIP."""
+def load_bundle(path: Path) -> dict[str, str | bytes]:
+    """Return {filename: text or bytes} from a portal bundle directory or ZIP."""
     if path.is_dir():
         root = path
         cleanup = None
@@ -81,21 +86,24 @@ def load_bundle(path: Path) -> dict[str, str]:
         sys.exit(1)
 
     try:
-        files: dict[str, str] = {}
+        files: dict[str, str | bytes] = {}
         for child in root.iterdir():
             if not child.is_file():
                 continue
             name = child.name
             if name.startswith(".") or name not in BUNDLE_NAMES:
                 continue
-            files[name] = child.read_text(encoding="utf-8")
+            if child.suffix.lower() in BINARY_BUNDLE_SUFFIXES:
+                files[name] = child.read_bytes()
+            else:
+                files[name] = child.read_text(encoding="utf-8")
         return files
     finally:
         if cleanup is not None:
             cleanup.cleanup()
 
 
-def validate_bundle(files: dict[str, str], *, flash_app: bool) -> list[str]:
+def validate_bundle(files: dict[str, str | bytes], *, flash_app: bool) -> list[str]:
     required = FLASH_APP_FILES if flash_app else BUNDLE_NAMES - {"README.txt"}
     missing = sorted(required - files.keys())
     if missing:
@@ -136,7 +144,11 @@ def flash_bundle(
         remote_paths: list[str] = []
         for local_name, remote_name in to_flash:
             dest = tmp_path / local_name
-            dest.write_text(files[local_name], encoding="utf-8")
+            payload = files[local_name]
+            if isinstance(payload, bytes):
+                dest.write_bytes(payload)
+            else:
+                dest.write_text(payload, encoding="utf-8")
             local_paths.append(dest)
             remote_paths.append(f":{remote_name}")
 

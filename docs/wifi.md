@@ -4,7 +4,7 @@ Inky Easel stores Wi-Fi credentials on the frame's SD card, not in the portal da
 
 ## How Wi-Fi is stored
 
-The frame reads networks from `/sd/inky_easel_config.json` (up to **five** networks). If that file is missing or empty, it falls back to legacy `/sd/secrets.py`.
+The frame reads networks from `/sd/inky_easel_config.json` (up to **three** networks). If that file is missing or empty, it falls back to legacy `/sd/secrets.py`.
 
 Each network entry has an SSID and password. One network is marked **active** and tried first on each wake-up.
 
@@ -59,19 +59,19 @@ This rewrites all firmware files and configuration, not just Wi-Fi.
 
 When Wi-Fi connection fails after three attempts, the frame shows **WI-FI UNAVAILABLE**.
 
-- Buttons **A** through **E** map to stored network slots 1–5.
+- The middle three lower buttons map to stored network slots 1–3.
 - LEDs indicate which slots have configured networks.
 - Press a button to switch to that network; the frame tries again.
 
 On **USB power**, the frame waits indefinitely for a button press. On **battery**, it turns off until a button wake selects a network.
 
-This works without the portal — useful when you moved the frame to a location with a different network that you already stored as slot B, C, etc.
+This works without the portal — useful when you moved the frame to a location with a different network that you already stored in another slot.
 
 To add new networks beyond what is already on the card, use **Configure** or **SD setup**.
 
 ## Adding multiple networks
 
-In **Configure**, click **Add network** (up to five total). Typical uses:
+In **Configure**, click **Add network** (up to three total). Typical uses:
 
 - Home and office Wi-Fi
 - Phone hotspot as backup
@@ -89,7 +89,7 @@ In developer mode, you can edit the server URL during SD setup or Configure. Use
 
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
-| WI-FI UNAVAILABLE on display | Wrong password, out of range, or wrong network | Press A–E to try another stored network, or use Configure / SD setup |
+| WI-FI UNAVAILABLE on display | Wrong password, out of range, or wrong network | Press the lower button below a network name to try another stored network, or use Configure / SD setup |
 | Frame never checks in | Server URL unreachable | Verify API is on the LAN/internet; check firewall |
 | Configure stuck on Waiting | Frame not reset or wrong Wi-Fi | Reset frame; ensure it can still reach server on current network |
 | Auth works but no content | Unrelated to Wi-Fi | Check schedule and location settings |

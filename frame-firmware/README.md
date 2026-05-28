@@ -8,20 +8,23 @@ requested duration.
 
 ## Files
 
-| File | Purpose |
-| --- | --- |
-| `flash_loader_main.py` | One-time internal-flash loader. Copy this to the frame as `main.py`. |
-| `main.py` | SD-card compatibility wrapper for firmware that boots SD `main.py` directly. |
-| `inky_easel_app.py` | App entry. Orchestrates wake -> poll -> render -> sleep. |
-| `frame_client.py` | HTTP poll, PNG streaming, plugin runner. |
-| `firmware_updater.py` | Downloads, verifies, backs up, and swaps SD firmware release files. |
-| `firmware_version.py` | Generated release version reported on every poll. |
-| `battery.py` | VSYS ADC sampling and percent conversion. |
-| `display.py` | Battery overlay, critical-battery screen, text rendering. |
-| `inky_helper.py` | Wi-Fi connect, helpers (lifted from Pimoroni examples). |
-| `wifi_config.py` | SD-card Wi-Fi credential list and API server settings. |
-| `secrets.py.template` | Replace with your Wi-Fi credentials before deploy. |
-| `frame_config.py.template` | Replace with your `FRAME_ID` / `FRAME_SECRET` / `SERVER_URL`. |
+
+| File                       | Purpose                                                                      |
+| -------------------------- | ---------------------------------------------------------------------------- |
+| `flash_loader_main.py`     | One-time internal-flash loader. Copy this to the frame as `main.py`.         |
+| `main.py`                  | SD-card compatibility wrapper for firmware that boots SD `main.py` directly. |
+| `inky_easel_app.py`        | App entry. Orchestrates wake -> poll -> render -> sleep.                     |
+| `frame_client.py`          | HTTP poll, PNG streaming, plugin runner.                                     |
+| `firmware_updater.py`      | Downloads, verifies, backs up, and swaps SD firmware release files.          |
+| `firmware_version.py`      | Generated release version reported on every poll.                            |
+| `battery.py`               | VSYS ADC sampling and percent conversion.                                    |
+| `display.py`               | Battery overlay, critical-battery screen, text rendering.                    |
+| `inky_helper.py`           | Wi-Fi connect, helpers (lifted from Pimoroni examples).                      |
+| `wifi_config.py`           | SD-card Wi-Fi credential list and API server settings.                       |
+| `wifi_unavailable.png`     | Pre-dithered full-screen image shown when Wi-Fi connection fails.            |
+| `secrets.py.template`      | Replace with your Wi-Fi credentials before deploy.                           |
+| `frame_config.py.template` | Replace with your `FRAME_ID` / `FRAME_SECRET` / `SERVER_URL`.                |
+
 
 ## One-time flash loader
 
@@ -65,7 +68,7 @@ any folder with the same files); the CLI only uploads them.
 
 ```bash
 pip install -r frame-firmware/requirements-flash.txt
-python frame-firmware/flash_to_pico.py ~/Downloads/inky-easel-my-frame.zip
+python utils/flash_to_pico.py ~/Downloads/inky-easel-my-frame.zip
 ```
 
 Plug the Inky Frame in over USB, run the command, then unplug or press reset.
@@ -75,12 +78,14 @@ use `/_content.png` on flash when no SD card is present (plugins use
 
 Options:
 
-| Flag | Purpose |
-| --- | --- |
-| `--list-devices` | Show serial ports mpremote can use |
-| `--device PATH` | Pick a board when several are connected |
-| `--dry-run` | Print the file list without copying |
+
+| Flag                  | Purpose                                                                 |
+| --------------------- | ----------------------------------------------------------------------- |
+| `--list-devices`      | Show serial ports mpremote can use                                      |
+| `--device PATH`       | Pick a board when several are connected                                 |
+| `--dry-run`           | Print the file list without copying                                     |
 | `--install-sd-loader` | One-time: write `flash_loader_main.py` as `main.py` for the SD workflow |
+
 
 ## Local testing
 

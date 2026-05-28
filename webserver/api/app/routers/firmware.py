@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import base64
+import mimetypes
+
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -72,4 +75,8 @@ async def firmware_file(
     entry = await get_firmware_file(release_id, path)
     if entry is None:
         raise HTTPException(404, "Firmware file not found")
+    if entry.binary:
+        content = base64.b64decode(entry.content)
+        media_type = mimetypes.guess_type(path)[0] or "application/octet-stream"
+        return Response(content=content, media_type=media_type)
     return Response(content=entry.content, media_type="text/x-python; charset=utf-8")

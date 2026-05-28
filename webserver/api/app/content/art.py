@@ -56,6 +56,82 @@ def _fit_to_target(image: Image.Image, target: RenderTarget) -> Image.Image:
     return canvas
 
 
+def _cover_target(image: Image.Image, target: RenderTarget, zoom: float = 1.0) -> Image.Image:
+    image = ImageOps.exif_transpose(image).convert("RGBA")
+    fitted = ImageOps.fit(image, (target.width, target.height), method=Image.LANCZOS, centering=(0.5, 0.5))
+    if zoom <= 1:
+        return fitted
+    scaled_size = (math.ceil(target.width * zoom), math.ceil(target.height * zoom))
+    fitted = fitted.resize(scaled_size, Image.LANCZOS)
+    left = (fitted.width - target.width) // 2
+    top = (fitted.height - target.height) // 2
+    return fitted.crop((left, top, left + target.width, top + target.height))
+
+
+def _black_yellow_white_chart(image: Image.Image, target: RenderTarget) -> Image.Image:
+    rgba = _cover_target(image, target, zoom=1.18)
+    alpha = rgba.getchannel("A")
+    mask = alpha.load()
+    width, height = rgba.size
+    visited = bytearray(width * height)
+    out = Image.new("RGB", (width, height), INKY_PALETTE["BLACK"])
+    pix = out.load()
+    white = INKY_PALETTE["WHITE"]
+    yellow = INKY_PALETTE["YELLOW"]
+
+    for y in range(height):
+        for x in range(width):
+            idx = y * width + x
+            if visited[idx] or mask[x, y] < 32:
+                continue
+
+            stack = [(x, y)]
+            visited[idx] = 1
+            points: list[tuple[int, int, int]] = []
+            min_x = max_x = x
+            min_y = max_y = y
+            while stack:
+                px, py = stack.pop()
+                a = mask[px, py]
+                points.append((px, py, a))
+                min_x = min(min_x, px)
+                max_x = max(max_x, px)
+                min_y = min(min_y, py)
+                max_y = max(max_y, py)
+                for nx, ny in ((px - 1, py), (px + 1, py), (px, py - 1), (px, py + 1)):
+                    if 0 <= nx < width and 0 <= ny < height:
+                        nidx = ny * width + nx
+                        if not visited[nidx] and mask[nx, ny] >= 32:
+                            visited[nidx] = 1
+                            stack.append((nx, ny))
+
+            comp_w = max_x - min_x + 1
+            comp_h = max_y - min_y + 1
+            is_star = len(points) <= 180 and comp_w <= 18 and comp_h <= 18
+            color = yellow if is_star else white
+            for px, py, a in points:
+                if a > 96:
+                    pix[px, py] = color
+
+    return out
+
+
+def _compass_rose(draw: ImageDraw.ImageDraw, target: RenderTarget) -> None:
+    cx = target.width - 38
+    cy = 38
+    r = 24
+    white = INKY_PALETTE["WHITE"]
+    yellow = INKY_PALETTE["YELLOW"]
+    black = INKY_PALETTE["BLACK"]
+    draw.ellipse((cx - r, cy - r, cx + r, cy + r), outline=white, width=2)
+    draw.polygon((cx, cy - r + 4, cx - 6, cy + 2, cx, cy - 3, cx + 6, cy + 2), fill=yellow)
+    draw.line((cx, cy + 4, cx, cy + r - 5), fill=white, width=2)
+    draw.line((cx - r + 5, cy, cx + r - 5, cy), fill=white, width=2)
+    font = _font(13, bold=True)
+    draw.rectangle((cx - 6, cy - r - 15, cx + 7, cy - r - 1), fill=black)
+    draw.text((cx - 5, cy - r - 17), "N", fill=white, font=font)
+
+
 def _label(draw: ImageDraw.ImageDraw, target: RenderTarget, title: str, subtitle: str) -> None:
     pad = 16
     title_font = _font(24, bold=True)
@@ -88,7 +164,7 @@ def render_night_sky(
         raise RuntimeError("Starplot is not installed in the API container.") from exc
 
     observer = Observer(dt=observed_at, lat=latitude, lon=longitude)
-    style = PlotStyle().extend(extensions.BLUE_MEDIUM)
+    style = PlotStyle().extend(extensions.BLUE_NIGHT)
     resolution = max(1400, min(2600, max(target.width, target.height) * 4))
     plot = ZenithPlot(observer=observer, style=style, resolution=resolution, autoscale=True)
     plot.horizon()
@@ -107,9 +183,9 @@ def render_night_sky(
         with Image.open(out) as exported:
             img = exported.copy()
 
-    fitted = _fit_to_target(img, target)
+    fitted = _black_yellow_white_chart(img, target)
     draw = ImageDraw.Draw(fitted)
-    _label(draw, target, "Night sky", observed_at.strftime("%b %-d, %-I:%M %p"))
+    _compass_rose(draw, target)
     return _finalize(fitted)
 
 
@@ -121,7 +197,7 @@ def render_mandelbrot(target: RenderTarget, *, seed: str, palette: str = "midnig
     span_x = 3.0 / zoom
     span_y = span_x * target.height / target.width
     max_iter = 72
-    img = Image.new("RGB", (target.width, target.height), INKY_PALETTE["WHITE"])
+    img = Image.new("RGB", (target.width, target.height), INKY_PALETTE["BLUE"])
     pix = img.load()
     colors = (
         [INKY_PALETTE[c] for c in ("WHITE", "YELLOW", "ORANGE", "RED", "BLUE", "BLACK")]
@@ -152,7 +228,7 @@ def render_location_rings(
     longitude: float,
     observed_at: datetime,
 ) -> bytes:
-    img = Image.new("RGB", (target.width, target.height), INKY_PALETTE["WHITE"])
+    img = Image.new("RGB", (target.width, target.height), INKY_PALETTE["YELLOW"])
     draw = ImageDraw.Draw(img)
     seed = f"{latitude:.4f}:{longitude:.4f}:{observed_at:%Y-%m-%d}"
     rng = random.Random(seed)
@@ -185,13 +261,17 @@ def render_wind_field(
     longitude: float | None,
     observed_at: datetime,
 ) -> bytes:
-    img = Image.new("RGB", (target.width, target.height), INKY_PALETTE["WHITE"])
+    img = Image.new("RGB", (target.width, target.height), INKY_PALETTE["GREEN"])
     draw = ImageDraw.Draw(img)
     lat = latitude or 0.0
     lon = longitude or 0.0
     phase = observed_at.timetuple().tm_yday / 365 * math.tau
     colors = [INKY_PALETTE[c] for c in ("BLUE", "GREEN", "BLACK", "RED")]
     step = max(24, min(target.width, target.height) // 10)
+
+    for y in range(0, target.height, 18):
+        shade = INKY_PALETTE["YELLOW"] if (y // 18) % 2 == 0 else INKY_PALETTE["WHITE"]
+        draw.rectangle((0, y, target.width, min(target.height, y + 18)), fill=shade)
 
     for y in range(step // 2, target.height, step):
         for x in range(step // 2, target.width, step):
