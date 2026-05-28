@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth import require_service_user
 from ..db import get_session
 from ..models import Frame, User
-from ..schemas import FrameAdminOut, FirmwareAdminOut, FirmwareReleaseCreate, FirmwareReleaseOut
+from ..schemas import FrameAdminOut, FrameOut, FirmwareAdminOut, FirmwareReleaseCreate, FirmwareReleaseOut
 from ..services.firmware import (
     activate_release as activate_firmware_release,
     compare_local_to_active_release,
@@ -33,12 +33,15 @@ async def admin_status(
     rows = (
         await session.execute(
             select(Frame, User.email)
-            .join(User, Frame.user_id == User.id)
+            .outerjoin(User, Frame.user_id == User.id)
             .order_by(Frame.created_at)
         )
     ).all()
     frames = [
-        FrameAdminOut.model_validate(frame, from_attributes=True).model_copy(update={"owner_email": email})
+        FrameAdminOut(
+            **FrameOut.model_validate(frame, from_attributes=True).model_dump(),
+            owner_email=email or "unknown",
+        )
         for frame, email in rows
     ]
     releases = await list_releases()

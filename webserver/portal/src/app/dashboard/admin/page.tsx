@@ -10,7 +10,7 @@ import {
   verifyAdminPassword,
 } from "@/lib/admin-auth";
 import { auth } from "@/lib/auth";
-import { api, type FirmwareAdmin, type FrameAdmin } from "@/lib/api";
+import { ApiError, api, type FirmwareAdmin, type FrameAdmin } from "@/lib/api";
 import { getDeveloperMode } from "@/lib/developer-mode";
 import { formatDateTime, parseApiDate } from "@/lib/time";
 
@@ -100,10 +100,11 @@ export default async function AdminPage(props: { searchParams: Promise<{ error?:
   }
 
   let data: FirmwareAdmin = { frames: [], releases: [], local_changes: [] };
+  let loadError: string | null = null;
   try {
     data = await api<FirmwareAdmin>("/api/firmware/admin");
-  } catch {
-    data = { frames: [], releases: [], local_changes: [] };
+  } catch (e) {
+    loadError = e instanceof ApiError ? e.message : "Could not load admin data from the API.";
   }
 
   const activeRelease = data.releases.find((release) => release.active) ?? null;
@@ -123,6 +124,12 @@ export default async function AdminPage(props: { searchParams: Promise<{ error?:
         </div>
         <Link href="/dashboard/frames/new" className="btn-secondary">New frame</Link>
       </div>
+
+      {loadError ? (
+        <p className="mt-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {loadError}
+        </p>
+      ) : null}
 
       <section className="mt-8 grid gap-4 md:grid-cols-4">
         <div className="card"><p className="text-xs uppercase tracking-wide text-ink-soft">Frames</p><p className="mt-2 text-2xl font-semibold">{data.frames.length}</p></div>
